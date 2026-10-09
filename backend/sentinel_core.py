@@ -69,7 +69,8 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
         corroborated = h_risk >= ATTACK_THRESHOLD or (
             llm_verdict is not None and llm_verdict.is_attack
         )
-        alone_needed = SEMANTIC_ALONE_SIMILARITY.get(sem_hit.mode, 0.90)
+        alone_key = "tfidf" if sem_hit.mode.startswith("tfidf") else "gemini"
+        alone_needed = SEMANTIC_ALONE_SIMILARITY.get(alone_key, 0.90)
         if sem_hit.similarity >= alone_needed or corroborated:
             candidates.append((sem_hit.severity, _CATEGORY_TO_CLASS[sem_hit.category]))
     if llm_verdict is not None and llm_verdict.is_attack:

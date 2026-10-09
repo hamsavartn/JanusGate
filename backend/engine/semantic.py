@@ -102,13 +102,12 @@ _CACHE_PATH = ROOT / "data" / "embeddings_cache.json"
 def _gemini_embed(texts: list[str]) -> list[list[float]] | None:
     from backend.engine.judge import get_client
 
-    client = get_client()
-    if client is None:
+    if get_client() is None:  # no key, or quota circuit breaker tripped
         return None
     try:
         from google.genai import types
 
-        res = client.models.embed_content(
+        res = get_client().models.embed_content(
             model=GEMINI_EMBED_MODEL,
             contents=texts,
             config=types.EmbedContentConfig(task_type="CLUSTERING"),
@@ -119,14 +118,24 @@ def _gemini_embed(texts: list[str]) -> list[list[float]] | None:
 
 
 def _ensure_ready() -> bool:
-    """Build (or fetch cached) corpus vectors. Idempotent; never raises."""
+    """Build (or fetch cached) corpus vectors. Idempotent; never raises.
+
+    TF-IDF matrices are ALWAYS built (cheap, local) so a live gemini query-embed
+    failure can fall back to TF-IDF without losing the semantic layer entirely.
+    """
     global _corpus_texts, _corpus_categories, _word_mat, _char_mat, _gemini_vecs
     global _word_vocab, _word_idf, _char_vocab, _char_idf, _mode
-    if _word_mat is not None or _gemini_vecs is not None:
+    if _word_mat is not None:
         return True
 
     _corpus_texts = [p.text for p in ATTACK_PAYLOADS]
     _corpus_categories = [p.category for p in ATTACK_PAYLOADS]
+
+    # Local fallback channel — always ready.
+    word_lists = [_word_tokens(t) for t in _corpus_texts]
+    char_lists = [_char_tokens(t) for t in _corpus_texts]
+    _word_mat, _word_vocab, _word_idf = _tfidf_vectorize(word_lists)
+    _char_mat, _char_vocab, _char_idf = _tfidf_vectorize(char_lists)
 
     if GEMINI_API_KEY:
         key = hashlib.sha256(
@@ -151,10 +160,6 @@ def _ensure_ready() -> bool:
                 pass
             return True
 
-    word_lists = [_word_tokens(t) for t in _corpus_texts]
-    char_lists = [_char_tokens(t) for t in _corpus_texts]
-    _word_mat, _word_vocab, _word_idf = _tfidf_vectorize(word_lists)
-    _char_mat, _char_vocab, _char_idf = _tfidf_vectorize(char_lists)
     _mode = "tfidf"
     return True
 
@@ -181,18 +186,26 @@ def semantic_scan(text: str) -> SemanticHit | None:
         if _mode == "gemini" and _gemini_vecs is not None:
             vecs = _gemini_embed([text])
             if vecs is None:
-                return None
-            v = np.array(vecs[0], dtype=np.float32)
-            norm = np.linalg.norm(v)
-            if norm > 0:
-                v = v / norm
-            sims = _gemini_vecs @ v
+                # Live embed failed (quota/rate limit) — fall back to TF-IDF channels.
+                sims = np.maximum(
+                    _word_mat @ _project(_word_tokens(text), _word_vocab, _word_idf),
+                    _char_mat @ _project(_char_tokens(text), _char_vocab, _char_idf),
+                )
+                fallback = True
+            else:
+                v = np.array(vecs[0], dtype=np.float32)
+                norm = np.linalg.norm(v)
+                if norm > 0:
+                    v = v / norm
+                sims = _gemini_vecs @ v
+                fallback = False
         else:
             word_sim = _word_mat @ _project(_word_tokens(text), _word_vocab, _word_idf) \
                 if _word_mat is not None else np.zeros(1)
             char_sim = _char_mat @ _project(_char_tokens(text), _char_vocab, _char_idf) \
                 if _char_mat is not None else np.zeros(1)
             sims = np.maximum(word_sim, char_sim)
+            fallback = False
 
         best = int(np.argmax(sims))
         score = float(sims[best])
@@ -204,7 +217,7 @@ def semantic_scan(text: str) -> SemanticHit | None:
             similarity=round(score, 3),
             matched_payload=ATTACK_PAYLOADS[best].name,
             severity=severity,
-            mode=_mode or "tfidf",
+            mode=("tfidf-fallback" if fallback else (_mode or "tfidf")),
         )
     except Exception:
         return None
