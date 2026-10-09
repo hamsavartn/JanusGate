@@ -11,7 +11,7 @@ returns **evidence-backed verdicts in milliseconds**, produces a per-message **s
 a tamper-evident audit log, and measures itself against an **external public validation set**.
 
 > ForgeHacks 2026 submission · Track: **AI + Cybersecurity**
-> Status: complete and verified — 16-point verification all green, 28 tests passing.
+> Status: complete and verified — 16-point verification all green, 35 tests passing.
 
 ## Why this matters
 
@@ -154,7 +154,7 @@ agent-sentinel/
 ├── dashboard/app.py                   Streamlit UI (7 tabs incl. egress + analytics)
 ├── simulator/                         dev attack suite + scripted demo scenario
 ├── evals/                             held-out set, external validation set, verification
-├── tests/                             pytest suite (28 tests)
+├── tests/                             pytest suite (35 tests)
 ├── Dockerfile, docker-compose.yml     containerized deployment (API + dashboard)
 └── .github/workflows/ci.yml           CI: tests + evals on every push
 ```

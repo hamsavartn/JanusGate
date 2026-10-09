@@ -1,0 +1,15 @@
+# Never bake into the image
+.venv/
+data/
+.env
+*.log
+.git/
+.github/
+__pycache__/
+*.pyc
+.pytest_cache/
+docs/
+tests/
+integrations/
+README.md
+AGENTS.md

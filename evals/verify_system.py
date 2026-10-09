@@ -2,7 +2,8 @@
 
 Checks (each printed as PASS/FAIL, exit code reflects failures):
   1. Every Python module compiles.
-  2. All six API endpoints respond correctly (TestClient, in-process).
+  2. Core API endpoints respond correctly (TestClient, in-process; egress/canary/
+     feedback covered in checks 10-12, proxy in 15).
   3. Dev suite runs and metrics are real numbers.
   4. Held-out eval runs and writes a fresh report.md.
   5. Audit log records inspections (queryable).
@@ -84,7 +85,7 @@ def main() -> int:
         return (f"health/inspect/simulate/audit/inbox/scenario OK (egress/canary/feedback in "
                 f"checks 10-12) — suite precision={s['precision']} recall={s['recall']}")
 
-    check("2. API — all six endpoints behave", _api)
+    check("2. API — core endpoints behave (13 routes total)", _api)
 
     # 3 ─ dev suite metrics printed
     def _suite():

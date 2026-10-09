@@ -85,7 +85,7 @@ flowchart LR
 
     G["Tool guard<br/>wraps agent tools,<br/>blocks attacked calls"]
     DASH["Streamlit dashboard<br/>Inspector · Suite · Inbox · Audit"]
-    SIM["Attack simulator<br/>25 dev payloads +<br/>held-out eval set"]
+    SIM["Attack simulator<br/>41 dev payloads +<br/>held-out eval set +<br/>external validation set"]
 
     U & E & D --> H --> S --> J --> M --> A
     M --> G
@@ -98,13 +98,16 @@ flowchart LR
 1. Heuristics scan → list of rule hits (rule id, category, severity, matched snippet).
 2. Semantic layer → similarity vs the labeled attack corpus; if ≥ threshold, a hit with the
    matched payload's category and similarity as severity basis.
-3. LLM judge (only if `GEMINI_API_KEY` present) → structured verdict: is_attack, attack_class,
-   risk 0–10, confidence, verbatim evidence, reasoning.
+3. LLM judges (Gemini primary; Featherless-hosted open model when configured) → structured
+   verdict: is_attack, attack_class, risk 0–10, confidence, verbatim evidence, reasoning.
+   Judge disagreement is surfaced; higher-risk verdict wins. Quota circuit-breaker included.
 4. Ensemble merge: any layer saying "attack ≥ threshold" wins (fail-closed on the strongest
-   signal, max risk across layers, class from the highest-risk layer). Layers actually used are
-   reported in the response.
-5. Audit append (JSONL): timestamp, source, preview, verdict, hits, llm verdict.
-6. Response: `EnsembleVerdict` (see `backend/schemas.py`).
+   signal, max risk across layers, class from the highest-risk layer). Mode-aware semantic
+   corroboration (tfidf 0.70 / gemini 0.90). Layers actually used are reported.
+5. Policy: per-source threshold (email stricter than user messages) + decaying session-risk
+   accumulator escalates multi-turn probing.
+6. Audit append (hash-chained JSONL): seq/prev_hash/hash, verdict, hits, llm verdict.
+7. Response: `EnsembleVerdict` (see `backend/schemas.py`).
 
 ## 5. Component map (file → responsibility → acceptance test)
 
@@ -112,29 +115,35 @@ flowchart LR
 |------|----------------|-----------|
 | `backend/config.py` | Env/.env loading; all keys; thresholds | No import-time key requirement |
 | `backend/schemas.py` | Every Pydantic shape (single source of truth) | Used by API, engine, dashboard |
-| `backend/engine/heuristics.py` | Layer 1: 12 rules across 5 attack categories | Dev suite 100% (disclosed as co-designed) |
-| `backend/engine/corpus.py` | Dev corpus: 19 attack + 6 benign labeled payloads | Count assert in tests |
-| `backend/engine/semantic.py` | Layer 2: embeddings (Gemini) with cached vectors; offline TF-IDF cosine fallback | Improves recall on eval set vs heuristics-only; no crash without key |
-| `backend/engine/judge.py` | Layer 3a: Gemini structured-output judge | Returns `None` cleanly with no key / API error |
+| `backend/engine/heuristics.py` | Layer 1: 14 rules + invisible-char detector (raw-text check + NFKC/zero-width normalization), 8-language phrases, URL risk shapes | Dev suite 100% (disclosed as co-designed) |
+| `backend/engine/corpus.py` | Dev corpus: 35 attack (19 original + 16 canonical textbook) + 6 benign labeled payloads | Count assert in tests (41 total) |
+| `backend/engine/semantic.py` | Layer 2: Gemini embeddings (cached) with ALWAYS-built TF-IDF word+char fallback (leet-normalized) on live-embed failure | Improves recall vs heuristics-only; quota-exhaustion resilient |
+| `backend/engine/judge.py` | Layer 3a: Gemini structured-output judge (gemini-3.8-flash default), 429 retry + circuit breaker | Returns `None` cleanly on no key / quota / error |
 | `backend/engine/judge_featherless.py` | Layer 3b: Featherless-hosted open-model judge (sponsor integration); multi-judge merge with disagreement flag | `None` cleanly without key; merge fail-closed |
 | `backend/engine/egress.py` | Egress defense: canary tripwire, credential shapes, system-prompt echo | Blocks leaks with redacted evidence; benign replies pass |
-| `backend/sentinel_core.py` | Ensemble merge + risk/class decision; concurrent layer execution | Verdict always well-formed |
+| `backend/engine/scam.py` | Consumer scam layer: brand impersonation, lookalike domains, fraud signals, archetype, safe-response advice | `/scam_report` + per-mail reports in inbox |
+| `backend/sentinel_core.py` | Ensemble merge (mode-aware corroboration) + policy engine wiring; concurrent layer execution | Verdict always well-formed |
+| `backend/policy.py` | Per-source thresholds + decaying session-risk escalation | Tests + verify check 16 |
 | `backend/audit.py` | JSONL audit log + query (ingress, egress, feedback entries) | `/audit` returns last N entries |
 | `backend/guard.py` | `SentinelGuard`: wrap tools / agent steps; `ToolBlocked` exception; reply passes egress | Blocked demo scenario passes |
 | `backend/surfaces/email_inbox.py` | Inbox abstraction: mock provider (preset benign+attack mail) and Agentboxd adapter (used when `AGENTBOXD_API_KEY` set) | `/email/inbox` returns messages + verdicts |
-| `backend/main.py` | FastAPI: `/health` `/inspect` `/simulate` `/audit` `/email/inbox` `/demo/scenario` | TestClient tests green |
+| `backend/main.py` | FastAPI, 13 routes: inspect, inspect_output, scam_report, canary, simulate, audit(+verify), email/inbox, demo/scenario, feedback(+stats), v1 proxy, health | TestClient tests green |
+| `backend/proxy.py` | OpenAI-compatible proxy: ingress-block pre-upstream, egress-check reply | Tests + verify check 15 |
+| `backend/mcp_server.py` | MCP server (mcp 2.x stdio): 3 tools | Import test |
 | `simulator/suite.py` | Dev-suite runner + metrics | precision/recall/F1 printed |
 | `simulator/scenarios.py` | Scripted story demo: assistant + inbox, one injected mail gets blocked | `/demo/scenario` returns step-by-step result |
 | `evals/payloads_eval.py` | **Held-out** eval set (never tuned against) | Separate file from dev corpus |
 | `evals/run_eval.py` | Per-layer eval → `evals/report.md` | Report regenerable |
 | `evals/external/prompt_injections.jsonl` | **Independent public benchmark** (deepset/prompt-injections, 546 samples, labels by dataset authors) | Vendored with attribution; refreshable |
-| `evals/run_external_eval.py` | Runs the ensemble on the public benchmark; appends section to report.md | Numbers regenerate; never used for tuning |
-| `evals/verify_system.py` | Chain-of-verification (13 points): boots API, exercises all endpoints, egress, canary, feedback, benchmark, secrets/git hygiene | All checks green |
+| `evals/run_external_eval.py` | Runs the ensemble on the public validation set (546; stratified sampling + judge pacing); appends to report.md + report.json | Numbers regenerate; leakage caveat disclosed |
+| `evals/gate.py` | CI regression gate (held-out F1 floor 0.9) | CI step |
+| `evals/verify_system.py` | Chain-of-verification (16 points, offline-deterministic): endpoints, egress, canary, feedback, audit chain, proxy, policy, external set, hygiene | All checks green |
 | `dashboard/app.py` | Streamlit UI, 7 tabs (Inspector, Egress & canary, Attack suite, Inbox, Scenario, Audit & analytics, About), dark theme | Headless run returns 200 |
-| `tests/test_api.py` | Endpoint tests (18) | pytest green |
+| `tests/test_api.py` + `tests/conftest.py` | 35 endpoint/engine tests, offline-deterministic (conftest strips keys) | pytest green |
 | `Dockerfile` + `docker-compose.yml` + `docs/deployment.md` | Deployment (API + dashboard) | compose up works |
 | `.github/workflows/ci.yml` | CI: compile + tests + evals on every push | green on GitHub |
-| `docs/devpost.md` | Submission copy | Fields match Devpost form |
+| `docs/devpost.md` | Submission copy with verbatim prompt mapping | Fields match Devpost form |
+| `docs/threat-model.md`, `docs/integrations.md`, `integrations/n8n/` | Threat model, integration cookbook, n8n template | Reviewed |
 | `docs/demo-script.md` | 3.5-min video script with voiceover | Timeline ≤ 4 min |
 
 ## 6. Detection taxonomy (attack classes)
