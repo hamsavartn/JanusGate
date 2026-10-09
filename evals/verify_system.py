@@ -246,8 +246,8 @@ def main() -> int:
             return "skipped"
         m = run_external_eval()
         assert m and m["n"] >= 400, m
-        return (f"public-dataset benchmark: n={m['n']} precision={m['precision']} "
-                f"recall={m['recall']} (untouched by tuning — honest number)")
+        return (f"external validation set: n={m['n']} precision={m['precision']} "
+                f"recall={m['recall']} (one disclosed calibration — see report)")
 
     check("13. external benchmark — independent public data", _external)
 

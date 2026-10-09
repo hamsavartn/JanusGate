@@ -86,6 +86,11 @@ class OutputRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20000, description="Agent reply text to inspect")
 
 
+class ScamReportRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=20000)
+    sender: str | None = Field(default=None, description="Sender line, e.g. 'PayPal <service@paypa1.com>'")
+
+
 class SuitePayloadResult(BaseModel):
     name: str
     category: Category | Literal["benign"]

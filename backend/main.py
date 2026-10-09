@@ -6,6 +6,7 @@ Run from the repo root (agent-sentinel/):
 from fastapi import FastAPI
 
 from backend.config import GEMINI_API_KEY, SENTINEL_HOST, SENTINEL_PORT
+from backend.engine.scam import ScamReport
 from backend.schemas import (
     EgressVerdict,
     EnsembleVerdict,
@@ -13,6 +14,7 @@ from backend.schemas import (
     InspectRequest,
     OutputRequest,
     ScenarioResult,
+    ScamReportRequest,
     SuiteResult,
 )
 from backend.sentinel_core import inspect_text
@@ -65,11 +67,14 @@ async def email_inbox() -> dict:
 
     inbox = get_inbox()
     messages = []
+    from backend.engine.scam import build_scam_report
+
     for m in inbox.fetch():
         verdict = await inspect_text(
             f"Subject: {m.subject}\nFrom: {m.sender}\n\n{m.body}",
             source="email",
         )
+        scam = build_scam_report(f"Subject: {m.subject}\n\n{m.body}", sender=m.sender)
         messages.append({
             "id": m.id,
             "sender": m.sender,
@@ -80,6 +85,7 @@ async def email_inbox() -> dict:
             "risk": verdict.final_risk,
             "evidence": (verdict.heuristic_hits[0].snippet if verdict.heuristic_hits
                          else (verdict.semantic_hit.matched_payload if verdict.semantic_hit else None)),
+            "scam": scam.model_dump(),
         })
     return {"provider": inbox.name, "messages": messages}
 
@@ -156,6 +162,15 @@ async def v1_chat_completions(payload: dict):
     from backend.proxy import handle_chat_completions
 
     return await handle_chat_completions(payload)
+
+
+@app.post("/scam_report", response_model=ScamReport)
+async def scam_report(req: ScamReportRequest) -> ScamReport:
+    """Consumer-facing scam & impersonation report: signals, scam archetype, risk,
+    and a safe-response recommendation — for the message's human recipient."""
+    from backend.engine.scam import build_scam_report
+
+    return build_scam_report(req.text, sender=req.sender)
 
 
 if __name__ == "__main__":

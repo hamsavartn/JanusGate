@@ -269,6 +269,53 @@ with suite_tab:
     else:
         st.info("Run the suite to see live precision/recall here.")
 
+# ----- Agent inbox -----
+with inbox_tab:
+    st.subheader("An agent-protected inbox — and a scam report for its human")
+    st.caption(
+        "The assistant processes every mail with the full ingress ensemble; each message also "
+        "gets a consumer-facing SCAM REPORT (impersonation, pressure tactics, archetype, and "
+        "the safe response) — scams, impersonation and fraud, answered for people."
+    )
+    if st.button("Fetch inbox", icon=":material/inbox:", type="primary"):
+        with st.spinner("Inspecting mailbox…"):
+            try:
+                r = httpx.get(f"{backend_url}/email/inbox", timeout=120)
+                st.session_state["inbox"] = r.json()
+            except Exception:
+                st.session_state["inbox"] = None
+
+    ib = st.session_state.get("inbox")
+    if ib:
+        st.badge(f"provider: {ib['provider']}", icon=":material/mail:")
+        for m in ib["messages"]:
+            blocked = m["is_attack"]
+            with st.container(border=True):
+                col1, col2 = st.columns([4, 1], vertical_alignment="center")
+                with col1:
+                    st.markdown(f"**{m['sender']}** — “{m['subject']}”")
+                    st.caption(m["preview"])
+                with col2:
+                    if blocked:
+                        st.badge(f"{m['attack_class']} · risk {m['risk']}", color="red")
+                    else:
+                        st.badge("clean", color="green")
+                if m.get("evidence"):
+                    st.markdown(f"> Evidence: `{m['evidence']}`")
+                scam = m.get("scam")
+                if scam:
+                    if scam["is_scam_risk"]:
+                        st.warning(
+                            f"**Scam report** — {scam['scam_type']} · risk {scam['risk']}/10 · "
+                            f"signals: {', '.join(s['signal'] for s in scam['signals'])}",
+                            icon=":material/fraud_alert:",
+                        )
+                        st.markdown(f"**Do this:** {scam['advice']}")
+                    else:
+                        st.caption("Scam report: no strong fraud signals.")
+    else:
+        st.info("Fetch the inbox to see the assistant block attacks and read the scam reports.")
+
 # ----- Demo scenario -----
 with scenario_tab:
     st.subheader("Scripted end-to-end story")

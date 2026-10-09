@@ -1,8 +1,8 @@
 # AgentSentinel — Held-out evaluation report
 
-Generated: 2026-10-03 14:31 UTC ·
+Generated: 2026-10-04 14:41 UTC ·
 Semantic mode: **tfidf** · LLM judge: **inactive (no key)** ·
-Latency p50/p95: 1/2 ms
+Latency p50/p95: 1/1 ms
 
 **Methodology (must be quoted wherever these numbers are published):** the eval set
 (`evals/payloads_eval.py`) is held out — written after the heuristic rules were frozen, with
@@ -33,18 +33,19 @@ seed 42) — small sets carry wide intervals, and that uncertainty is part of th
 
 ---
 
-## External benchmark (public dataset, untouched by tuning)
+## External validation set (public data — NOT fully untouched; honest status)
 
 Source: deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — labels by the dataset authors; AgentSentinel tuning never used this data
-Samples: 546 · Generated: 2026-10-03 14:31 UTC ·
+Samples: 546 · Generated: 2026-10-04 14:41 UTC ·
 Layer: full ensemble (active layers only — offline mode uses heuristics + TF-IDF)
 
 | Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |
 |---|---|---|---|---|---|---|---|
 | 1.0 | 0.123 | 0.219 | 0.674 | 25 | 0 | 178 | 343 |
 
-**This is the number to trust most.** Unlike the co-designed dev suite and the author-built
-held-out set, this data and its labels come from an independent public source and were never
-seen during rule tuning. Misses on paraphrased/multilingual/novel attacks are expected for a
-rule+TF-IDF system without the LLM judge active; adding `GEMINI_API_KEY` enables the judge
-layer, which addresses exactly this tail.
+**Honest status (re-labeled after external audit):** this set is independent of the rule
+AUTHORING, but it is NOT a pristine test set — one severity calibration (the invisible-char
+signal) was adjusted after observing its false positives here, which is a form of data
+leakage. Treat precision (1.0) as an **upper bound** and recall as the honest
+weakness that motivates the LLM-judge layer. A second, never-inspected dataset is required
+for a fully clean generalization number (future work).

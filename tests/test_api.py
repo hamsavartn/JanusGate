@@ -282,3 +282,75 @@ def test_mcp_server_imports():
     # tool decorator registered the three tools on the server
     tools = getattr(m.mcp, "_tool_manager", None)
     assert tools is not None or hasattr(m.mcp, "tool")
+
+
+# ---------- scam & impersonation layer (track-prompt fit) ----------
+
+def test_scam_display_name_impersonation():
+    from backend.engine.scam import build_scam_report
+
+    r = build_scam_report(
+        "Your account will be suspended within 24 hours. Verify your account now and "
+        "confirm your password.",
+        sender="Microsoft Account Team <security-alerts@microsoft-verify.example>")
+    assert r.is_scam_risk
+    assert r.impersonated_brand == "microsoft"
+    assert any(s.signal.startswith("impersonation:microsoft") for s in r.signals)
+    assert any(s.signal == "urgency_pressure" for s in r.signals)
+
+
+def test_scam_lookalike_domain():
+    from backend.engine.scam import build_scam_report
+
+    r = build_scam_report(
+        "Your account is limited. Log in at https://www.paypa1.com/resolve to restore access.",
+        sender="PayPal <service@paypa1.com>")
+    assert r.impersonated_brand == "paypal"
+    assert r.is_scam_risk
+
+
+def test_scam_freemail_brand_claim():
+    from backend.engine.scam import build_scam_report
+
+    r = build_scam_report(
+        "Hi, we noticed activity on your profile.",
+        sender="Netflix Support <netflix.support.team@gmail.com>")
+    assert r.impersonated_brand == "netflix"
+    assert any(s.signal == "impersonation:freemail" for s in r.signals)
+
+
+def test_scam_legit_sender_clean():
+    from backend.engine.scam import build_scam_report
+
+    r = build_scam_report(
+        "Your monthly statement is now available in your Chase app.",
+        sender="Chase <no-reply@chase.com>")
+    assert not r.is_scam_risk
+    assert r.impersonated_brand is None
+    assert r.advised_action == "none"
+
+
+def test_scam_bec_archetype():
+    from backend.engine.scam import build_scam_report
+
+    r = build_scam_report(
+        "I'm the CEO. I'm in a meeting and can't talk. Process this wire transfer to the "
+        "vendor account below right away and confirm by reply. Keep it confidential.")
+    assert r.scam_type == "bec_ceo_fraud"
+    assert r.advised_action == "verify_via_official_channel"
+
+
+def test_scam_report_endpoint(client):
+    r = client.post("/scam_report", json={
+        "text": "We sent you a code. Share the OTP with our agent to restore access.",
+        "sender": None}).json()
+    assert r["is_scam_risk"] and r["scam_type"] == "otp_relay"
+    assert r["advised_action"] == "delete_and_report"
+
+
+def test_email_inbox_includes_scam_reports(client):
+    r = client.get("/email/inbox").json()
+    assert len(r["messages"]) >= 5
+    assert all("scam" in m for m in r["messages"])
+    impersonation = [m for m in r["messages"] if m["scam"].get("impersonated_brand")]
+    assert impersonation, "mock inbox must contain an impersonation example"

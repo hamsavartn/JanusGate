@@ -83,7 +83,7 @@ def render_external_section(m: dict) -> str:
     return f"""
 ---
 
-## External benchmark (public dataset, untouched by tuning)
+## External validation set (public data — NOT fully untouched; honest status)
 
 Source: {SOURCE}
 Samples: {m["n"]} · Generated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} ·
@@ -93,11 +93,12 @@ Layer: full ensemble (active layers only — offline mode uses heuristics + TF-I
 |---|---|---|---|---|---|---|---|
 | {m["precision"]} | {m["recall"]} | {m["f1"]} | {m["accuracy"]} | {m["tp"]} | {m["fp"]} | {m["fn"]} | {m["tn"]} |
 
-**This is the number to trust most.** Unlike the co-designed dev suite and the author-built
-held-out set, this data and its labels come from an independent public source and were never
-seen during rule tuning. Misses on paraphrased/multilingual/novel attacks are expected for a
-rule+TF-IDF system without the LLM judge active; adding `GEMINI_API_KEY` enables the judge
-layer, which addresses exactly this tail.
+**Honest status (re-labeled after external audit):** this set is independent of the rule
+AUTHORING, but it is NOT a pristine test set — one severity calibration (the invisible-char
+signal) was adjusted after observing its false positives here, which is a form of data
+leakage. Treat precision ({m["precision"]}) as an **upper bound** and recall as the honest
+weakness that motivates the LLM-judge layer. A second, never-inspected dataset is required
+for a fully clean generalization number (future work).
 """
 
 

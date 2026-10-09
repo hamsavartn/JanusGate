@@ -46,7 +46,7 @@
     "misses": [],
     "latency_ms": {
       "p50": 1,
-      "p95": 2
+      "p95": 1
     },
     "mode": "tfidf",
     "llm_active": false
