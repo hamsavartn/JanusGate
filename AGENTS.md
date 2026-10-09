@@ -3,6 +3,7 @@
 You are continuing **JanusGate**, a ForgeHacks 2026 submission (Track: AI + Cybersecurity).
 Read these files in this order before touching anything:
 
+1. `HANDOFF.md` — complete continuation brief (start here)
 1. `docs/constraints.md` — hard rules; violating C1–C7 is a project failure, not a style issue
 2. `docs/PROJECT_BLUEPRINT.md` — the full design: why this project, architecture, every component, roadmap
 3. `README.md` — what's currently shipped
