@@ -1,8 +1,8 @@
-"""External benchmark — AgentSentinel vs a public, untouched dataset.
+"""External benchmark — JanusGate vs a public, untouched dataset.
 
 Runs the full ensemble on evals/external/prompt_injections.jsonl (deepset/prompt-injections,
 546 labeled samples, labels by the dataset authors). This is the honest generalization
-measure: AgentSentinel's rules were never tuned on it. Results are appended to
+measure: JanusGate's rules were never tuned on it. Results are appended to
 evals/report.md. Humbling numbers here are the point — disclose, don't hide.
 
 Run:  .venv/Scripts/python.exe -m evals.run_external_eval [--refresh]
@@ -23,7 +23,7 @@ from evals.run_eval import REPORT_PATH as MAIN_REPORT
 
 EXTERNAL_PATH = Path(__file__).parent / "external" / "prompt_injections.jsonl"
 SOURCE = ("deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — "
-          "labels by the dataset authors; AgentSentinel tuning never used this data")
+          "labels by the dataset authors; JanusGate tuning never used this data")
 
 
 def refresh_dataset() -> bool:

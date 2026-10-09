@@ -1,4 +1,4 @@
-# AgentSentinel — Held-out evaluation report
+# JanusGate — Held-out evaluation report
 
 Generated: 2026-10-08 16:12 UTC ·
 Semantic mode: **tfidf** · LLM judge: **active (Gemini)** ·
@@ -36,7 +36,7 @@ seed 42) — small sets carry wide intervals, and that uncertainty is part of th
 
 ## External validation set (public data — NOT fully untouched; honest status)
 
-Source: deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — labels by the dataset authors; AgentSentinel tuning never used this data
+Source: deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — labels by the dataset authors; JanusGate tuning never used this data
 Samples: deterministic stratified sample of **120** of 546 (class mix preserved) · Generated: 2026-10-08 16:24 UTC ·
 Layer: full ensemble (layers active per call) · Judge verdicts obtained: **0/120** (rate-limited calls degraded to heuristics+semantic); elapsed 12.0 min
 

@@ -1,5 +1,5 @@
 {
-  "name": "AgentSentinel — guard every LLM step",
+  "name": "JanusGate — guard every LLM step",
   "nodes": [
     {
       "parameters": {
@@ -22,7 +22,7 @@
         "jsonBody": "={\n  \"text\": {{ JSON.stringify($json.textToCheck || \"Replace me: wire the text you want guarded\") }},\n  \"source\": \"tool_output\"\n}"
       },
       "id": "a2",
-      "name": "AgentSentinel inspect",
+      "name": "JanusGate inspect",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [40, 0]
@@ -81,17 +81,17 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [-440, 0],
-      "webhookId": "agentsentinel-demo"
+      "webhookId": "janusgate-demo"
     }
   ],
   "connections": {
     "Webhook: text to check": {
-      "main": [[{ "node": "AgentSentinel inspect", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "JanusGate inspect", "type": "main", "index": 0 }]]
     },
     "Every 5 minutes": {
-      "main": [[{ "node": "AgentSentinel inspect", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "JanusGate inspect", "type": "main", "index": 0 }]]
     },
-    "AgentSentinel inspect": {
+    "JanusGate inspect": {
       "main": [
         [
           { "node": "Attack detected?", "type": "main", "index": 0 },
@@ -102,7 +102,7 @@
   },
   "settings": { "executionOrder": "v1" },
   "meta": {
-    "description": "ForgeHacks 2026 — AgentSentinel (AI + Cybersecurity). Import into n8n (Workflows → Import from file), then wire your own trigger and actions. Attack paths stop here; clean paths continue. Replace localhost with your deployed Sentinel URL."
+    "description": "ForgeHacks 2026 — JanusGate (AI + Cybersecurity). Import into n8n (Workflows → Import from file), then wire your own trigger and actions. Attack paths stop here; clean paths continue. Replace localhost with your deployed Sentinel URL."
   },
-  "tags": ["agentsentinel", "security", "forgehacks"]
+  "tags": ["janusgate", "security", "forgehacks"]
 }

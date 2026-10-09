@@ -1,4 +1,4 @@
-# AgentSentinel — Constraints & Requirements
+# JanusGate — Constraints & Requirements
 
 Single source of truth for what must / must not be done on this project.
 Any agent or human working here reads this file FIRST and follows it exactly.
@@ -54,7 +54,7 @@ Any agent or human working here reads this file FIRST and follows it exactly.
 
 ## 4. Judging criteria → where this project answers each
 
-| Criterion | How AgentSentinel answers it |
+| Criterion | How JanusGate answers it |
 |-----------|------------------------------|
 | Real-World Impact & Relevance | People-first: scams/impersonation/fraud answered via scam reports + agent firewall; verbatim prompt mapping in `docs/devpost.md` (recognize/prevent/verify/respond) |
 | Technical Implementation & AI Use ("not just a wrapper") | 3-layer ingress ensemble + multi-judge merge + egress defense + policy engine; measurable precision/recall/F1 with disclosed methodology |

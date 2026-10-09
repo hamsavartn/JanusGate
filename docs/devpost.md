@@ -1,14 +1,16 @@
 # Devpost submission copy (fill into https://forgehacks-2026.devpost.com)
 
 ## Project title
-AgentSentinel — a security firewall & audit trail for AI agents
+JanusGate — the two-way firewall & audit trail for AI agents
+
+*(named for Janus, the Roman god of gateways with two faces — one watching what enters, one watching what leaves)*
 
 ## Track
 AI + Cybersecurity
 
 ## Short description ( elevator)
 AI agents read email, documents and web content written by strangers — and follow whatever
-hidden instructions they find there. AgentSentinel is a firewall that inspects everything an
+hidden instructions they find there. JanusGate is a firewall that inspects everything an
 agent is about to read (3-layer detection ensemble: heuristics + semantic similarity + Gemini
 structured-output judge), blocks attacks with evidence, logs every decision for audit, and
 proves its detection quality with a built-in attack simulator (live precision/recall/F1).
@@ -19,7 +21,7 @@ proves its detection quality with a built-in attack simulator (live precision/re
 Scams, impersonation, and fraud are now industrialized with AI: LLM-written phishing with
 lookalike domains lands in real inboxes, CEO-fraud and OTP-relay texts pressure people into
 payments, and the newest target is the AI assistant itself — one hidden line in an email can
-hijack an agent into forwarding data or authorizing a fraudulent payment. **AgentSentinel
+hijack an agent into forwarding data or authorizing a fraudulent payment. **JanusGate
 protects people on both fronts:** a per-message scam report (signals, archetype, safe
 response) for the human recipient, and a firewall that stops an AI agent from being weaponized
 against them. Target users: (1) everyone with an inbox — via agent-protected mail and the
@@ -41,7 +43,7 @@ scam report; (2) developers and small teams deploying AI agents who need drop-in
   **canary tripwire** token planted in the system prompt (appearance in a reply = certain
   exfiltration, risk 10), credential-shape detection (AWS/GitHub/Slack/Google/OpenAI keys,
   JWTs, private-key blocks — evidence is redacted), and verbatim system-prompt echo detection.
-- **SentinelGuard:** wraps agent tools (e.g. `send_email`) and blocks calls whose arguments
+- **JanusGuard:** wraps agent tools (e.g. `send_email`) and blocks calls whose arguments
   carry injected instructions, before execution; generated replies also pass egress.
 - **Agent email surface:** mock inbox by default; Agentboxd adapter (`AGENTBOXD_API_KEY`) for
   the sponsor's real agent inboxes.
@@ -88,7 +90,7 @@ modern technologies."
 
 - **Recognize** — the 3-layer ingress ensemble + brand-impersonation/lookalike-domain detection
   flag scam texts, AI-written phishing, and hijack attempts with evidence.
-- **Prevent** — SentinelGuard blocks attacked tool calls before execution; egress defense stops
+- **Prevent** — JanusGuard blocks attacked tool calls before execution; egress defense stops
   credential/system-prompt leaks before they leave; the proxy blocks attacks before the model
   even sees them.
 - **Verify** — every verdict carries verbatim evidence quotes and confidence; the audit log is

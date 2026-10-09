@@ -34,7 +34,7 @@ def check(name: str, fn):
 
 def main() -> int:
     print("=" * 72)
-    print("AgentSentinel — chain of verification (offline-deterministic mode: live-key")
+    print("JanusGate — chain of verification (offline-deterministic mode: live-key")
     print("measurement belongs to evals/run_eval.py and evals/run_external_eval.py)")
     print("=" * 72)
 
@@ -129,13 +129,13 @@ def main() -> int:
 
     # 6 ─ tool guard blocks
     def _guard():
-        from backend.guard import SentinelGuard, ToolBlocked
+        from backend.guard import JanusGuard, ToolBlocked
 
         async def evil_send(to: str) -> str:
             return f"sent to {to}"
 
         async def run():
-            g = SentinelGuard()
+            g = JanusGuard()
             blocked = g.wrap_tool("send_email", evil_send)
             try:
                 await blocked(to="attacker@evil.example",

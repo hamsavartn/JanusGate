@@ -1,4 +1,4 @@
-# ForgeHacks 2026 — AgentSentinel Strategy
+# ForgeHacks 2026 — JanusGate Strategy
 
 ## The hackathon
 - **ForgeHacks Online 2026** — student-only, fully online, Oct 3–12 2026. Theme: AI for Real
@@ -22,7 +22,7 @@
 4. Security work can *prove* AI substance with measurable metrics (precision/recall on an
    attack suite) — directly answering the "not just a wrapper" criterion.
 
-## Project: AgentSentinel
+## Project: JanusGate
 Security firewall + audit trail for AI agents. Four components:
 1. **Sentinel Core** (FastAPI middleware) — wraps an agent's prompts/tool calls/responses.
 2. **Detection ensemble** — (a) heuristics/rules, (b) embedding-similarity classifier vs a

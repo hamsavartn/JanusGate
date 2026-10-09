@@ -4,7 +4,7 @@ An assistant with a (mock or Agentboxd) inbox processes its mail: benign request
 get handled, the phishing mail and the injected invoice are blocked with evidence.
 Also demonstrates the tool guard via a wrapped send_email tool.
 """
-from backend.guard import SentinelGuard, ToolBlocked
+from backend.guard import JanusGuard, ToolBlocked
 from backend.schemas import ScenarioResult, ScenarioStep
 from backend.sentinel_core import inspect_text
 from backend.surfaces.email_inbox import get_inbox
@@ -12,7 +12,7 @@ from backend.surfaces.email_inbox import get_inbox
 
 async def run_scenario_async() -> ScenarioResult:
     steps: list[ScenarioStep] = []
-    guard = SentinelGuard()
+    guard = JanusGuard()
 
     # Wrap a "send_email" tool the agent supposedly has — used by the hijack step.
     sent: list[dict] = []
@@ -75,7 +75,7 @@ async def run_scenario_async() -> ScenarioResult:
         attack_class="direct_injection" if tool_blocked else None,
         risk=9 if tool_blocked else None,
         evidence=tool_evidence,
-        detail=("BLOCKED by SentinelGuard before the tool executed"
+        detail=("BLOCKED by JanusGuard before the tool executed"
                 if tool_blocked else "tool executed (should not happen)"),
     ))
 

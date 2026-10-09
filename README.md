@@ -1,11 +1,13 @@
-# AgentSentinel 🛡️
+# JanusGate 🏛️🛡️
+
+> *One face watches what enters. One watches what leaves.*
 
 **A two-way security firewall + audit trail that protects PEOPLE from AI-enabled scams,
 impersonation, and fraud — in the inbox you have today, and inside the AI agents that will
 read your mail tomorrow.** Scams now arrive written by LLMs, impersonating brands with
 lookalike domains, pressuring you to pay or hand over codes. And the newest target is your AI
 assistant: one hidden line in an email can hijack an agent into forwarding data or authorizing
-payments. AgentSentinel inspects **everything an agent reads and everything it sends**,
+payments. JanusGate inspects **everything an agent reads and everything it sends**,
 returns **evidence-backed verdicts in milliseconds**, produces a per-message **scam report**
 (signals, archetype, and the safe response) for the human recipient, records every decision in
 a tamper-evident audit log, and measures itself against an **external public validation set**.
@@ -19,7 +21,7 @@ OWASP maintains a dedicated **LLM Top 10** because prompt injection (LLM01), sen
 information disclosure (LLM02), excessive agency (LLM06), and system-prompt leakage (LLM07)
 are current, unsolved attack classes. Every agent that reads email, browses the web, or
 ingests documents is exposed. Existing defenses are closed-source commercial APIs or one-shot
-regex filters; AgentSentinel is an open, layered, **self-measuring** defense you can run
+regex filters; JanusGate is an open, layered, **self-measuring** defense you can run
 anywhere — including fully offline.
 
 ## Architecture
@@ -46,7 +48,7 @@ flowchart LR
         ECHO["System-prompt echo check"]
     end
 
-    G["SentinelGuard<br/>tool-call firewall"]
+    G["JanusGuard<br/>tool-call firewall"]
     FB["Human feedback loop"]
     DASH["Streamlit dashboard<br/>7 tabs"]
     SIM["Attack simulator +<br/>held-out eval +<br/>external public benchmark"]
@@ -71,7 +73,7 @@ flowchart LR
 
 **OWASP LLM Top 10 mapping:** LLM01 Prompt Injection → injection rules · LLM02 Sensitive
 Information Disclosure → exfiltration rules + egress credential detection · LLM06 Excessive
-Agency → tool-hijack rule + SentinelGuard · LLM07 System Prompt Leakage → prompt-probe rule +
+Agency → tool-hijack rule + JanusGuard · LLM07 System Prompt Leakage → prompt-probe rule +
 egress echo check + canary tripwire.
 
 ## Measured results — three suites, disclosed honestly

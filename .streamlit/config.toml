@@ -1,4 +1,4 @@
-# AgentSentinel dashboard theme — dark security-ops look
+# JanusGate dashboard theme — dark security-ops look
 [theme]
 base = "dark"
 primaryColor = "#22c55e"

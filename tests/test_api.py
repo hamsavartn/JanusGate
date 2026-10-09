@@ -74,10 +74,10 @@ def test_demo_scenario(client):
 def test_guard_blocks(tmp_path: Path, monkeypatch):
     import asyncio
 
-    from backend.guard import SentinelGuard, ToolBlocked
+    from backend.guard import JanusGuard, ToolBlocked
 
     async def run():
-        g = SentinelGuard()
+        g = JanusGuard()
 
         async def send(to: str, body: str) -> str:
             return "sent"
@@ -126,10 +126,10 @@ def test_canary_detection(client):
 def test_egress_in_guard_reply(tmp_path):
     import asyncio
 
-    from backend.guard import SentinelGuard
+    from backend.guard import JanusGuard
 
     async def run():
-        g = SentinelGuard()
+        g = JanusGuard()
         # _generate_stub offline reply is benign — egress should pass it
         reply, v = await g.agent_reply("What's a good name for a cat?")
         assert "blocked" not in reply.lower() or v.is_attack
@@ -252,7 +252,7 @@ def test_proxy_blocks_ingress_without_upstream(client, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["sentinel"]["action"] == "blocked_ingress"
-    assert "AgentSentinel" in body["choices"][0]["message"]["content"]
+    assert "JanusGate" in body["choices"][0]["message"]["content"]
 
 
 def test_proxy_clean_without_upstream_503(client, monkeypatch):
@@ -278,7 +278,7 @@ def test_proxy_content_extraction():
 def test_mcp_server_imports():
     import backend.mcp_server as m
 
-    assert m.mcp.name == "agentsentinel"
+    assert m.mcp.name == "janusgate"
     # tool decorator registered the three tools on the server
     tools = getattr(m.mcp, "_tool_manager", None)
     assert tools is not None or hasattr(m.mcp, "tool")

@@ -52,7 +52,7 @@ def extract_contents(messages: list[dict]) -> list[tuple[str, str, str]]:
 
 def _synthetic_response(model: str, content: str, sentinel: dict) -> dict:
     return {
-        "id": f"chatcmpl-sentinel-{uuid.uuid4().hex[:12]}",
+        "id": f"chatcmpl-janusgate-{uuid.uuid4().hex[:12]}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": model,
@@ -85,7 +85,7 @@ async def handle_chat_completions(payload: dict) -> dict:
             worst = ingress_results[-1]
 
     if worst is not None:
-        content = (f"⛔ [AgentSentinel] Request blocked — {worst['attack_class']} detected "
+        content = (f"⛔ [JanusGate] Request blocked — {worst['attack_class']} detected "
                    f"in the {worst['role']} message (risk {worst['risk']}/10). "
                    f"Evidence: “{worst['evidence']}”. The request was never sent upstream.")
         return _synthetic_response(model, content, {
@@ -122,7 +122,7 @@ async def handle_chat_completions(payload: dict) -> dict:
     if egress is not None:
         audit.record_egress(egress, source="proxy_reply")
     if egress is not None and egress.is_leak and egress.risk >= 8:
-        content = (f"⛔ [AgentSentinel] Reply blocked by egress defense — "
+        content = (f"⛔ [JanusGate] Reply blocked by egress defense — "
                    f"{'/'.join(egress.reasons)} (risk {egress.risk}/10). The model output "
                    f"was stopped before leaving the system.")
         return _synthetic_response(model, content, {

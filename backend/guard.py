@@ -1,7 +1,7 @@
-"""SentinelGuard — wrap agent tools and agent steps with Sentinel inspection.
+"""JanusGuard — wrap agent tools and agent steps with Sentinel inspection.
 
 The guard is the integration point a real agent framework would use:
-  guard = SentinelGuard()
+  guard = JanusGuard()
   safe_search = guard.wrap_tool("web_search", web_search)   # blocked calls raise ToolBlocked
   reply = await guard.agent_reply(user_text)                # checked generate step
 """
@@ -19,11 +19,11 @@ class ToolBlocked(Exception):
         self.verdict = verdict
         top = verdict.heuristic_hits[0].snippet if verdict.heuristic_hits else verdict.text_preview
         super().__init__(
-            f"Blocked by AgentSentinel: {verdict.attack_class} (risk {verdict.final_risk}/10). Evidence: {top!r}"
+            f"Blocked by JanusGate: {verdict.attack_class} (risk {verdict.final_risk}/10). Evidence: {top!r}"
         )
 
 
-class SentinelGuard:
+class JanusGuard:
     def __init__(self, threshold: int = ATTACK_THRESHOLD):
         self.threshold = threshold
         self.blocked: list[EnsembleVerdict] = []
@@ -45,8 +45,8 @@ class SentinelGuard:
                 return await result
             return result
 
-        guarded.__name__ = f"sentinel_guarded_{name}"
-        guarded.__doc__ = f"AgentSentinel-guarded wrapper around {name}"
+        guarded.__name__ = f"janusguard_{name}"
+        guarded.__doc__ = f"JanusGate-guarded wrapper around {name}"
         return guarded
 
     async def agent_reply(self, user_text: str) -> tuple[str, EnsembleVerdict]:
@@ -64,7 +64,7 @@ class SentinelGuard:
                 verdict.heuristic_hits[0].snippet if verdict.heuristic_hits else verdict.text_preview
             )
             return (
-                f"⛔ Request blocked by AgentSentinel — {verdict.attack_class} "
+                f"⛔ Request blocked by JanusGate — {verdict.attack_class} "
                 f"(risk {verdict.final_risk}/10). Evidence: “{evidence}”"
             ), verdict
 
@@ -74,7 +74,7 @@ class SentinelGuard:
         audit.record_egress(egress)
         if egress.is_leak and egress.risk >= self.threshold:
             return (
-                f"⛔ Reply blocked by AgentSentinel egress defense — "
+                f"⛔ Reply blocked by JanusGate egress defense — "
                 f"{'/'.join(egress.reasons)} (risk {egress.risk}/10). The agent's output "
                 f"was stopped before leaving the system."
             ), verdict
@@ -98,8 +98,8 @@ class SentinelGuard:
                 contents=user_text,
                 config=types.GenerateContentConfig(
                     system_instruction=(
-                        "You are the Sentinel demo assistant. Answer helpfully in at most "
-                        "two short sentences. You are protected by AgentSentinel."
+                        "You are the JanusGate demo assistant. Answer helpfully in at most "
+                        "two short sentences. You are protected by JanusGate."
                     ),
                     max_output_tokens=120,
                 ),

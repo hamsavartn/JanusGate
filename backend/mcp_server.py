@@ -1,8 +1,8 @@
-"""MCP server — expose AgentSentinel as tools for any MCP-capable agent platform.
+"""MCP server — expose JanusGate as tools for any MCP-capable agent platform.
 
 Model Context Protocol (stdio transport, mcp 2.x). Configure in any MCP client, e.g.:
 
-    { "mcpServers": { "agentsentinel": {
+    { "mcpServers": { "janusgate": {
         "command": "<repo>/.venv/Scripts/python.exe",
         "args": ["-m", "backend.mcp_server"] } } }
 
@@ -10,7 +10,7 @@ Tools: inspect_text (ingress ensemble), inspect_output (egress defense), audit_v
 """
 from mcp.server.mcpserver import MCPServer
 
-mcp = MCPServer("agentsentinel")
+mcp = MCPServer("janusgate")
 
 
 @mcp.tool()

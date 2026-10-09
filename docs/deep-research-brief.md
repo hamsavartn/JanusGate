@@ -32,7 +32,7 @@ open-source models; n8n = workflow automation; Momen = no-code full-stack AI app
 OUR PROFILE: one experienced developer (has shipped AI apps end-to-end; primary LLM = Gemini
 API key with free tier; secondary = $25 Featherless sponsor credit), building ambitiously with
 a multi-component architecture, targeting best overall odds.
-MY CHOSEN DIRECTION: track = AI + Cybersecurity. Project = "AgentSentinel": a security
+MY CHOSEN DIRECTION: track = AI + Cybersecurity. Project = "JanusGate": a security
 firewall + audit layer for AI agents. Components: (1) FastAPI middleware wrapping any LLM
 agent's tool calls and I/O; (2) detection ensemble = heuristics + embedding-similarity
 classifier (grounded on public prompt-injection datasets, OWASP LLM Top 10) + Gemini LLM-judge
@@ -49,7 +49,7 @@ RESEARCH TASKS (answer each with evidence and citations):
    differentiation gaps a 7-day student project can exploit.
 3. Public datasets/benchmarks I can use for the detection ensemble + eval harness
    (prompt-injection datasets, phishing corpora like Enron/phishing URLs, jailbreak benchmarks).
-4. Feasibility attack: find the top risks in shipping AgentSentinel in 7 days by ~1–4
+4. Feasibility attack: find the top risks in shipping JanusGate in 7 days by ~1–4
    students, and concrete mitigations (scope cuts, libraries to reuse).
 5. Sponsor leverage: from the sponsor descriptions above, what's the smartest, lowest-risk way
    to visibly integrate Agentboxd and Featherless into this project for judging credit?

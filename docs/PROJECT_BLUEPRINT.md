@@ -1,4 +1,4 @@
-# AgentSentinel — Complete Project Blueprint
+# JanusGate — Complete Project Blueprint
 
 **The one document that contains everything.** A new agent (or human) reading ONLY this file,
 `docs/constraints.md`, and `AGENTS.md` can continue, finish, or extend this project exactly as
@@ -8,7 +8,7 @@ intended. Last updated: Oct 3, 2026 (Day 1 of the hackathon, full build complete
 
 ## 1. What this is
 
-**AgentSentinel** is a two-way security firewall and audit trail for AI agents. Modern AI agents
+**JanusGate** is a two-way security firewall and audit trail for AI agents. Modern AI agents
 read emails, documents, web pages, and tool outputs — text written by *other people*. That text
 becomes part of the agent's instructions ("context"). Attackers exploit this with **prompt
 injection** (hidden instructions inside an email or document), **jailbreaks**, **tool hijacking**
@@ -16,7 +16,7 @@ injection** (hidden instructions inside an email or document), **jailbreaks**, *
 **phishing** delivered directly into the agent's context window. Agents can also **leak**:
 echoing system prompts and credentials into their replies.
 
-AgentSentinel sits between the world and the agent. Every piece of text the agent is about to
+JanusGate sits between the world and the agent. Every piece of text the agent is about to
 read passes through a detection ensemble that returns an **evidence-backed verdict** (attack?
 which class? risk 0–10? what exact quotes drove the decision?) — and every reply the agent
 produces passes an **egress defense** (canary tripwire, credential-leak shapes, system-prompt
@@ -125,7 +125,7 @@ flowchart LR
 | `backend/sentinel_core.py` | Ensemble merge (mode-aware corroboration) + policy engine wiring; concurrent layer execution | Verdict always well-formed |
 | `backend/policy.py` | Per-source thresholds + decaying session-risk escalation | Tests + verify check 16 |
 | `backend/audit.py` | JSONL audit log + query (ingress, egress, feedback entries) | `/audit` returns last N entries |
-| `backend/guard.py` | `SentinelGuard`: wrap tools / agent steps; `ToolBlocked` exception; reply passes egress | Blocked demo scenario passes |
+| `backend/guard.py` | `JanusGuard`: wrap tools / agent steps; `ToolBlocked` exception; reply passes egress | Blocked demo scenario passes |
 | `backend/surfaces/email_inbox.py` | Inbox abstraction: mock provider (preset benign+attack mail) and Agentboxd adapter (used when `AGENTBOXD_API_KEY` set) | `/email/inbox` returns messages + verdicts |
 | `backend/main.py` | FastAPI, 13 routes: inspect, inspect_output, scam_report, canary, simulate, audit(+verify), email/inbox, demo/scenario, feedback(+stats), v1 proxy, health | TestClient tests green |
 | `backend/proxy.py` | OpenAI-compatible proxy: ingress-block pre-upstream, egress-check reply | Tests + verify check 15 |
@@ -185,7 +185,7 @@ The chassis is deliberately prompt-agnostic. Mapping rules:
   in the video; retitle Devpost emphasis to "phishing defense for agent inboxes".
 - If it's about **prompt injection / agent safety** → lead with Inspector + tool guard; the
   default framing already matches.
-- If it's about **SCADA/IoT/network/classic security** → position AgentSentinel as the AI layer:
+- If it's about **SCADA/IoT/network/classic security** → position JanusGate as the AI layer:
   human-facing security copilot framing; the simulator stays the differentiator.
 - Whatever it says: add an explicit "How we answer the prompt" section at the TOP of the Devpost
   description quoting the prompt verbatim. This is criterion #1 for judges.

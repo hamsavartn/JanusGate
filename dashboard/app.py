@@ -1,4 +1,4 @@
-"""AgentSentinel dashboard.
+"""JanusGate dashboard.
 
 Talks to the FastAPI backend over HTTP. Run from the repo root:
     .venv/Scripts/python.exe -m streamlit run dashboard/app.py
@@ -12,7 +12,7 @@ import streamlit as st
 DEFAULT_BACKEND = os.getenv("BACKEND_URL", "http://127.0.0.1:8123")
 
 st.set_page_config(
-    page_title="AgentSentinel",
+    page_title="JanusGate",
     page_icon=":material/shield_lock:",
     layout="wide",
 )
@@ -55,7 +55,7 @@ def post_simulate(backend_url: str) -> dict | None:
 
 # ---------- sidebar ----------
 with st.sidebar:
-    st.header(":material/shield_lock: AgentSentinel")
+    st.header(":material/shield_lock: JanusGate")
     st.caption("Security firewall + audit trail for AI agents — ForgeHacks 2026")
 
     backend_url = st.text_input("Backend URL", value=DEFAULT_BACKEND)
@@ -380,7 +380,7 @@ with audit_tab:
             st.download_button(
                 "Export as CSV",
                 data=audit_df.to_csv(index=False).encode("utf-8"),
-                file_name=f"agentsentinel_audit_{a['count']}.csv",
+                file_name=f"janusgate_audit_{a['count']}.csv",
                 mime="text/csv",
                 icon=":material/download:",
             )
@@ -449,14 +449,14 @@ with audit_tab:
 
 # ----- About -----
 with about_tab:
-    st.subheader("Why AgentSentinel")
+    st.subheader("Why JanusGate")
     st.markdown(
         """
         AI agents now read email, browse documents, and call tools autonomously — which makes them
         an attack surface. Prompt injection, jailbreaks, tool hijacking, secret exfiltration, and
         phishing delivered straight into an agent's context are real, current attacks.
 
-        **AgentSentinel** is a firewall that inspects everything an agent is about to read
+        **JanusGate** is a firewall that inspects everything an agent is about to read
         *and send*, using a layered ensemble:
 
         1. **Heuristics** — 13 deterministic rules, instant, always on

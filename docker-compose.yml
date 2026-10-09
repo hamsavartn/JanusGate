@@ -1,4 +1,4 @@
-# AgentSentinel — API + dashboard, one command:
+# JanusGate — API + dashboard, one command:
 #   docker compose up --build
 #   API: http://localhost:8123/docs · Dashboard: http://localhost:8501
 services:

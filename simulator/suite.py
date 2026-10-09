@@ -61,7 +61,7 @@ def run_suite() -> SuiteResult:
 
 if __name__ == "__main__":
     report = run_suite()
-    print(f"AgentSentinel attack suite — {report.total} payloads")
+    print(f"JanusGate attack suite — {report.total} payloads")
     print(
         f"precision={report.precision}  recall={report.recall}  "
         f"f1={report.f1}  accuracy={report.accuracy}"

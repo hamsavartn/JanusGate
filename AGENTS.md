@@ -1,6 +1,6 @@
-# AGENTS.md — Operating instructions for any agent working on AgentSentinel
+# AGENTS.md — Operating instructions for any agent working on JanusGate
 
-You are continuing **AgentSentinel**, a ForgeHacks 2026 submission (Track: AI + Cybersecurity).
+You are continuing **JanusGate**, a ForgeHacks 2026 submission (Track: AI + Cybersecurity).
 Read these files in this order before touching anything:
 
 1. `docs/constraints.md` — hard rules; violating C1–C7 is a project failure, not a style issue

@@ -121,7 +121,7 @@ def render_report(r: dict) -> str:
     misses = ("\n**Missed attacks (ensemble):** " + ", ".join(f"`{m}`" for m in r["misses"])
               if r["misses"] else "\n**Missed attacks (ensemble):** none")
 
-    return f"""# AgentSentinel — Held-out evaluation report
+    return f"""# JanusGate — Held-out evaluation report
 
 Generated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} ·
 Semantic mode: **{r["mode"]}** · LLM judge: **{"active (Gemini)" if r["llm_active"] else "inactive (no key)"}** ·

@@ -1,4 +1,4 @@
-"""Scam & impersonation analysis — the consumer-facing layer of AgentSentinel.
+"""Scam & impersonation analysis — the consumer-facing layer of JanusGate.
 
 The track prompt asks for solutions that help PEOPLE recognize, prevent, verify, or
 respond to scams, impersonation, and fraud. This module produces a per-message

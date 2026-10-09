@@ -1,4 +1,4 @@
-# Threat model — AgentSentinel
+# Threat model — JanusGate
 
 Written to be judged: explicit assets, actors, surfaces, mitigations, and *what we do not
 protect against*. Mapped to the OWASP LLM Top 10 (2025).
@@ -8,7 +8,7 @@ protect against*. Mapped to the OWASP LLM Top 10 (2025).
 |---|---|---|
 | Agent system prompt / configuration | "You are the support agent for…" | `reveal_system_prompt` rule; egress echo check; **canary tripwire** |
 | Credentials reachable by the agent | API keys, tokens, session data | `secret_exfil` rule; egress credential shapes (redacted evidence) |
-| Integrity of agent actions | emails sent, files deleted, payments | `tool_hijack` rule; **SentinelGuard** tool firewall |
+| Integrity of agent actions | emails sent, files deleted, payments | `tool_hijack` rule; **JanusGuard** tool firewall |
 | User data flowing through | conversation history, inbox contents | webhook/paste-site exfil rule; audit **redaction mode** |
 | Trust in the agent's decisions | "why was my request blocked?" | evidence-backed verdicts; **tamper-evident audit chain** |
 
@@ -28,7 +28,7 @@ protect against*. Mapped to the OWASP LLM Top 10 (2025).
 | Ingress: chat | direct injection, DAN/persona, encoded payloads | heuristics (rules 1–3, 6) + semantic + LLM judges |
 | Ingress: email | hidden instructions in body/footer, phishing, OTP relay | indirect-injection markers, phishing rules, **per-source policy (email threshold 4)**, mock/Agentboxd surface |
 | Ingress: documents/web | footnotes, invisible characters, fake system tags, RAG poisoning | normalization (NFKC + zero-width removal), `invisible_chars` + `indirect_injection_marker` rules |
-| Ingress: tools | hijacked tool args, forged function calls | `tool_hijack` rule; SentinelGuard blocks pre-execution |
+| Ingress: tools | hijacked tool args, forged function calls | `tool_hijack` rule; JanusGuard blocks pre-execution |
 | Egress: replies | system-prompt echo, credential dumps, canary exfil | `inspect_output`: canary (risk 10), credential shapes, 8-gram echo |
 | Multi-turn | low-and-slow probing across turns | **session risk accumulator** (decaying score, escalation) |
 | Platform (this API) | log tampering, verdict disputes | hash-chained JSONL + `/audit/verify`; feedback loop; CI regression gate |

@@ -6,9 +6,9 @@ enables the LLM judge + embedding layers (env var / platform secret).
 ## Option A — Docker anywhere (Railway / Render / Fly.io / a VPS)
 
 ```bash
-docker build -t agentsentinel .
-docker run -p 8123:8123 -e GEMINI_API_KEY=... agentsentinel          # API
-docker run -p 8501:8501 agentsentinel \
+docker build -t janusgate .
+docker run -p 8123:8123 -e GEMINI_API_KEY=... janusgate          # API
+docker run -p 8501:8501 janusgate \
   streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0   # dashboard
 ```
 

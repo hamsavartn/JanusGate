@@ -1,4 +1,4 @@
-"""AgentSentinel API — inspect text, run the attack suite, health.
+"""JanusGate API — inspect text, run the attack suite, health.
 
 Run from the repo root (agent-sentinel/):
     .venv/Scripts/python.exe -m uvicorn backend.main:app --port 8123
@@ -20,7 +20,7 @@ from backend.schemas import (
 from backend.sentinel_core import inspect_text
 
 app = FastAPI(
-    title="AgentSentinel",
+    title="JanusGate",
     version="0.1.0",
     description="Security firewall + audit trail for AI agents (ForgeHacks 2026).",
 )
@@ -30,7 +30,7 @@ app = FastAPI(
 def health() -> dict:
     return {
         "status": "ok",
-        "service": "agentsentinel",
+        "service": "janusgate",
         "version": "0.1.0",
         "llm_judge_active": bool(GEMINI_API_KEY),
         "layers": ["heuristics"] + (["llm_judge"] if GEMINI_API_KEY else []),
