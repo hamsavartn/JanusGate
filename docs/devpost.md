@@ -26,7 +26,7 @@ drop-in protection, and security reviewers who need evidence, not vibes.
 ### Technical approach & components
 - **Sentinel Core (FastAPI, Python 3.13):** one `POST /inspect` call wraps any agent input
   (user message, email, tool output, document) and returns an evidence-backed verdict.
-- **3-layer ingress ensemble** (`backend/engine/`): (1) 13 deterministic heuristic rules
+- **3-layer ingress ensemble** (`backend/engine/`): (1) 14 deterministic heuristic rules + invisible-char detector
   covering direct/indirect injection, jailbreaks, tool hijacking, exfiltration, phishing —
   including non-English injection phrases; (2) semantic similarity against a labeled attack
   corpus — Gemini embeddings online, offline TF-IDF fallback, with a corroboration principle

@@ -32,7 +32,8 @@ _CATEGORY_TO_CLASS: dict[str, AttackClass] = {
 }
 
 
-async def inspect_text(text: str, source: str = "user_message", record: bool = True) -> EnsembleVerdict:
+async def inspect_text(text: str, source: str = "user_message", record: bool = True,
+                       session_id: str | None = None) -> EnsembleVerdict:
     t0 = time.perf_counter()
 
     hits = heuristics.scan(text)
@@ -69,13 +70,25 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
     if llm_verdict is not None and llm_verdict.is_attack:
         candidates.append((llm_verdict.risk_score, llm_verdict.attack_class))
 
+    # --- single-text risk, before policy ---
+    from backend.policy import session_should_block, threshold_for, update_session_risk
+
+    threshold = threshold_for(source)
     if candidates:
         final_risk, attack_class = max(candidates, key=lambda c: c[0])
-        is_attack = final_risk >= ATTACK_THRESHOLD
+        single_attack = final_risk >= threshold
     else:
-        final_risk = 0
-        attack_class = "benign"
-        is_attack = False
+        final_risk, attack_class, single_attack = 0, "benign", False
+
+    # --- policy: session accumulation escalates repeated sub-threshold probing ---
+    session_score = update_session_risk(session_id, final_risk, single_attack)
+    escalated = session_should_block(session_score)
+    is_attack = single_attack or escalated
+    if escalated:
+        if not single_attack:
+            attack_class = "direct_injection"  # repeated probing → injection buildup
+            final_risk = max(final_risk, 6)
+        layers.append("session_policy")
 
     preview = text if len(text) <= 160 else text[:157] + "..."
     verdict = EnsembleVerdict(

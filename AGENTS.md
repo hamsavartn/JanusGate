@@ -41,7 +41,7 @@ Read these files in this order before touching anything:
 # tests
 .venv/Scripts/python.exe -m pytest tests/ -q
 
-# full system verification (13-point chain of verification)
+# full system verification (16-point chain of verification)
 .venv/Scripts/python.exe -m evals.verify_system
 ```
 

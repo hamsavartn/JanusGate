@@ -23,6 +23,29 @@ SENTINEL_CANARY_TOKEN = os.getenv("SENTINEL_CANARY_TOKEN", "CANARY-AS-9f3b7c2a-e
 # Optional: paste the agent's real system prompt to detect verbatim echoes in replies.
 SENTINEL_SYSTEM_PROMPT = os.getenv("SENTINEL_SYSTEM_PROMPT", "").strip()
 
+# Audit privacy: when "1", stored previews are redacted (first 24 chars + hash) so the
+# log proves what was inspected without storing user content in the clear.
+AUDIT_REDACT = os.getenv("AUDIT_REDACT", "0") == "1"
+
+# Per-source policy thresholds: emails are held to a stricter standard than direct
+# user messages (attacker controls email content; users see their own prompts).
+SOURCE_THRESHOLDS: dict[str, int] = {
+    "user_message": int(os.getenv("THRESHOLD_USER_MESSAGE", "5")),
+    "tool_output": int(os.getenv("THRESHOLD_TOOL_OUTPUT", "5")),
+    "email": int(os.getenv("THRESHOLD_EMAIL", "4")),
+    "document": int(os.getenv("THRESHOLD_DOCUMENT", "4")),
+}
+# Session risk: repeated sub-threshold probing escalates. Score decays ~half each
+# 10 minutes; sessions at/above this are escalated regardless of single-text verdict.
+SESSION_RISK_BLOCK = int(os.getenv("SESSION_RISK_BLOCK", "12"))
+SESSION_HALF_LIFE_MIN = float(os.getenv("SESSION_HALF_LIFE_MIN", "10"))
+
+# Upstream for proxy mode (OpenAI-compatible). Gemini exposes an OpenAI-compatible
+# endpoint, so the same key works; any OpenAI-compatible provider can be substituted.
+UPSTREAM_BASE_URL = os.getenv("UPSTREAM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
+UPSTREAM_API_KEY = os.getenv("UPSTREAM_API_KEY", GEMINI_API_KEY)
+UPSTREAM_DEFAULT_MODEL = os.getenv("UPSTREAM_DEFAULT_MODEL", "gemini-2.5-flash")
+
 SENTINEL_HOST = os.getenv("SENTINEL_HOST", "127.0.0.1")
 SENTINEL_PORT = int(os.getenv("SENTINEL_PORT", "8123"))
 

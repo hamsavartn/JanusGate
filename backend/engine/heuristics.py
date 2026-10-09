@@ -2,10 +2,22 @@
 
 Fast, deterministic, always-on. Catches obvious attack patterns and produces
 severity-weighted hits. The LLM judge (layer 3) covers everything the rules miss.
+
+Input is normalized before scanning (NFKC + zero-width character removal) so
+obfuscation via invisible characters cannot smuggle phrases past the rules.
 """
 import re
+import unicodedata
 
 from backend.schemas import HeuristicHit
+
+# Zero-width / invisible characters used to split keywords invisibly.
+_INVISIBLE_RE = re.compile(r"[\u200b-\u200f\u2060-\u2064\u206a-\u206f\ufeff\xad]")
+
+
+def normalize_for_scan(text: str) -> str:
+    """NFKC normalization + invisible-character removal (deterministic, lossy-safe)."""
+    return _INVISIBLE_RE.sub("", unicodedata.normalize("NFKC", text))
 
 # (rule_id, category, regex, severity 0-10, explanation)
 RULES: list[tuple[str, str, re.Pattern, int, str]] = [
@@ -103,12 +115,29 @@ RULES: list[tuple[str, str, re.Pattern, int, str]] = [
             r"ignor(e|ez|es)\s+(toutes?\s+|les\s+|tes\s+|vos\s+)*(instructions?|directives?)\s+(précédentes?|antérieures?)|"
             r"donne(-|\s)?moi\s+(ton|votre)\s+(prompt|instructions?)\s+(système|systeme)|"
             r"ignora\s+(todas?\s+|las\s+)*(instrucciones|indicaciones)\s+(anteriores|previas)|"
+            r"ignore\s+(todas?\s+|as\s+)*(instruções|instrucciones)\s+(anteriores|prévias)|"
             r"ignoriere\s+(alle\s+)?(bisherigen\s+|vorherigen\s+)?anweisungen|"
+            r"игнорир(уй|овать|уйте)\s+(все\s+)?(предыдущие|прежние)\s+(инструкции|указания)|"
+            r"忽略(之前|以前|所有)?(的)?(指令|指示)|以前の指示を無視|"
+            r"पिछले\s*(निर्देश|हिदायतें)\s*(को)?\s*नज़रअंदाज|"
             r"अपने पिछले निर्देश",
             re.IGNORECASE,
         ),
         8,
-        "High-signal non-English prompt-injection phrases (FR/ES/DE/HI).",
+        "High-signal non-English prompt-injection phrases (FR/ES/PT/DE/RU/ZH/JA/HI).",
+    ),
+    (
+        "suspicious_url",
+        "phishing",
+        re.compile(
+            r"https?://(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|"            # IP-literal host
+            r"https?://[^/\s]*xn--|"                                      # punycode host
+            r"https?://([^/\s]+\.)+([^/\s]+)[/\s][^\s]{40,}",             # very long path
+            re.IGNORECASE,
+        ),
+        5,
+        "URL with risk shape (IP-literal host, punycode, or unusually long path) — "
+        "common in phishing; verify the destination.",
     ),
     (
         "secret_exfil",
@@ -176,6 +205,19 @@ BENIGN_MAX_PER_RULE = 2  # cap snippets per rule to keep output clean
 
 def scan(text: str) -> list[HeuristicHit]:
     hits: list[HeuristicHit] = []
+    # Flag invisible characters on the RAW text (normalization would erase the evidence).
+    # Severity 3: alone this is informational (real-world text often contains stray
+    # zero-widths from copy-paste); hidden PHRASES still get caught by the normalized
+    # re-scan, so this hit only adds context boost alongside real rules.
+    if _INVISIBLE_RE.search(text):
+        hits.append(HeuristicHit(
+            rule="invisible_chars", category="injection", severity=3,
+            snippet="(zero-width/invisible characters present)",
+            explanation="Zero-width/invisible characters — a common trick to smuggle or "
+                        "obfuscate instructions (normalized text is also re-scanned, so "
+                        "hidden phrases still surface).",
+        ))
+    text = normalize_for_scan(text)
     for rule_id, category, pattern, severity, explanation in RULES:
         count = 0
         for m in pattern.finditer(text):

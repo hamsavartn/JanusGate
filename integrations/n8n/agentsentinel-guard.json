@@ -1,0 +1,108 @@
+{
+  "name": "AgentSentinel — guard every LLM step",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{}]
+        }
+      },
+      "id": "a1",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8123/inspect",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": {{ JSON.stringify($json.textToCheck || \"Replace me: wire the text you want guarded\") }},\n  \"source\": \"tool_output\"\n}"
+      },
+      "id": "a2",
+      "name": "AgentSentinel inspect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_attack }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a3",
+      "name": "Attack detected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [320, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_attack }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "false", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a4",
+      "name": "Clean — continue workflow",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [320, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sentinel-webhook",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "a5",
+      "name": "Webhook: text to check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-440, 0],
+      "webhookId": "agentsentinel-demo"
+    }
+  ],
+  "connections": {
+    "Webhook: text to check": {
+      "main": [[{ "node": "AgentSentinel inspect", "type": "main", "index": 0 }]]
+    },
+    "Every 5 minutes": {
+      "main": [[{ "node": "AgentSentinel inspect", "type": "main", "index": 0 }]]
+    },
+    "AgentSentinel inspect": {
+      "main": [
+        [
+          { "node": "Attack detected?", "type": "main", "index": 0 },
+          { "node": "Clean — continue workflow", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "ForgeHacks 2026 — AgentSentinel (AI + Cybersecurity). Import into n8n (Workflows → Import from file), then wire your own trigger and actions. Attack paths stop here; clean paths continue. Replace localhost with your deployed Sentinel URL."
+  },
+  "tags": ["agentsentinel", "security", "forgehacks"]
+}

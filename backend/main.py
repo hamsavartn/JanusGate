@@ -137,6 +137,27 @@ def feedback_stats() -> dict:
             "agreement_rate": round((total - wrong) / total, 3) if total else None}
 
 
+@app.get("/audit/verify")
+def audit_verify() -> dict:
+    """Verify the tamper-evident hash chain of the audit log."""
+    from backend import audit
+
+    return audit.verify_chain()
+
+
+@app.post("/v1/chat/completions")
+async def v1_chat_completions(payload: dict):
+    """OpenAI-compatible security proxy — inspect ingress, forward, inspect egress.
+
+    Point any OpenAI-SDK agent at this base_url; attacks are blocked before the
+    upstream call, leaks are blocked before the reply leaves. Responses carry a
+    `sentinel` metadata object. Non-streaming only.
+    """
+    from backend.proxy import handle_chat_completions
+
+    return await handle_chat_completions(payload)
+
+
 if __name__ == "__main__":
     import uvicorn
 

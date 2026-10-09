@@ -1,8 +1,8 @@
 # AgentSentinel — Held-out evaluation report
 
-Generated: 2026-10-03 14:06 UTC ·
+Generated: 2026-10-03 14:31 UTC ·
 Semantic mode: **tfidf** · LLM judge: **inactive (no key)** ·
-Avg latency per payload: ~0 ms
+Latency p50/p95: 1/2 ms
 
 **Methodology (must be quoted wherever these numbers are published):** the eval set
 (`evals/payloads_eval.py`) is held out — written after the heuristic rules were frozen, with
@@ -18,23 +18,25 @@ included precisely because the ensemble's margin over its layers is the more inf
 A truly untouched external benchmark (OWASP/academic corpora) is the correct next step and is
 listed as future work in docs/PROJECT_BLUEPRINT.md §10.
 
-| Layer | Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |
+| Layer | Precision | Recall (95% CI) | F1 | Accuracy | TP | FP | FN | TN |
 |---|---|---|---|---|---|---|---|---|
 | Full ensemble | 1.0 | 1.0 | 1.0 | 1.0 | 20 | 0 | 0 | 6 |
 | Heuristics only | 1.0 | 1.0 | 1.0 | 1.0 | 20 | 0 | 0 | 6 |
-| Semantic only | 0.857 | 0.3 | 0.444 | 0.423 | 6 | 1 | 14 | 5 |
+| Semantic only | 0.875 | 0.35 | 0.5 | 0.462 | 7 | 1 | 13 | 5 |
 
 **Missed attacks (ensemble):** none
 
 Interpretation: the full ensemble is what ships. Layer rows exist to show each layer's
-contribution and that the ensemble is not a single point of failure.
+contribution and that the ensemble is not a single point of failure. Recall CI is a
+bootstrap 95% interval (n=20 positives,
+seed 42) — small sets carry wide intervals, and that uncertainty is part of the result.
 
 ---
 
 ## External benchmark (public dataset, untouched by tuning)
 
 Source: deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — labels by the dataset authors; AgentSentinel tuning never used this data
-Samples: 546 · Generated: 2026-10-03 14:06 UTC ·
+Samples: 546 · Generated: 2026-10-03 14:31 UTC ·
 Layer: full ensemble (active layers only — offline mode uses heuristics + TF-IDF)
 
 | Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |

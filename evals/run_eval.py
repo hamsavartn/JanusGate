@@ -6,6 +6,7 @@ writes evals/report.md. Never mutates rules or thresholds — measurement only.
 Run:  .venv/Scripts/python.exe -m evals.run_eval
 """
 import asyncio
+import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,9 +29,39 @@ def _prf(items: list[tuple[bool, bool]]) -> dict:
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    ci = _bootstrap_ci(items)
     return {"tp": tp, "fp": fp, "fn": fn, "tn": tn,
             "precision": round(precision, 3), "recall": round(recall, 3),
-            "f1": round(f1, 3), "accuracy": round((tp + tn) / len(items), 3) if items else 0.0}
+            "f1": round(f1, 3), "accuracy": round((tp + tn) / len(items), 3) if items else 0.0,
+            "recall_ci95": ci}
+
+
+def _bootstrap_ci(items: list[tuple[bool, bool]], n_boot: int = 1000,
+                  seed: int = 42) -> list[float] | None:
+    """95% CI for recall via bootstrap (deterministic seed). None if no positives."""
+    import random
+
+    positives = [p for e, p in items if e]
+    if not positives:
+        return None
+    rng = random.Random(seed)
+    n = len(items)
+    recalls = []
+    for _ in range(n_boot):
+        sample = [items[rng.randrange(n)] for _ in range(n)]
+        tp = sum(1 for e, p in sample if e and p)
+        fn = sum(1 for e, p in sample if e and not p)
+        recalls.append(tp / (tp + fn) if tp + fn else 0.0)
+    recalls.sort()
+    return [round(recalls[int(0.025 * n_boot)], 3), round(recalls[int(0.975 * n_boot) - 1], 3)]
+
+
+def _pctl(values: list[int], p: float) -> int:
+    if not values:
+        return 0
+    s = sorted(values)
+    idx = min(len(s) - 1, max(0, int(round(p * (len(s) - 1)))))
+    return s[idx]
 
 
 async def run_eval_async() -> dict:
@@ -39,12 +70,14 @@ async def run_eval_async() -> dict:
     sem: list[tuple[bool, bool]] = []
     llm: list[tuple[bool, bool]] = []
     misses: list[str] = []
+    latencies: list[int] = []
     t0 = time.perf_counter()
 
     for p in EVAL_PAYLOADS:
         expected = p.category != "benign"
 
         v = await inspect_text(p.text, source="user_message", record=False)
+        latencies.append(v.latency_ms)
         full.append((expected, v.is_attack))
         heur.append((expected, v.heuristic_risk >= ATTACK_THRESHOLD))
         sem.append((expected, v.semantic_hit is not None and v.semantic_hit.severity >= ATTACK_THRESHOLD))
@@ -59,7 +92,7 @@ async def run_eval_async() -> dict:
         "semantic_only": _prf(sem),
         "llm_judge": _prf(llm) if llm else None,
         "misses": misses,
-        "latency_avg_ms": int((time.perf_counter() - t0) * 1000 / max(len(EVAL_PAYLOADS), 1)),
+        "latency_ms": {"p50": _pctl(latencies, 0.50), "p95": _pctl(latencies, 0.95)},
         "mode": semantic_mode(),
         "llm_active": bool(GEMINI_API_KEY),
     }
@@ -84,7 +117,7 @@ def render_report(r: dict) -> str:
 
 Generated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} ·
 Semantic mode: **{r["mode"]}** · LLM judge: **{"active (Gemini)" if r["llm_active"] else "inactive (no key)"}** ·
-Avg latency per payload: ~{r["latency_avg_ms"]} ms
+Latency p50/p95: {r["latency_ms"]["p50"]}/{r["latency_ms"]["p95"]} ms
 
 **Methodology (must be quoted wherever these numbers are published):** the eval set
 (`evals/payloads_eval.py`) is held out — written after the heuristic rules were frozen, with
@@ -100,7 +133,7 @@ included precisely because the ensemble's margin over its layers is the more inf
 A truly untouched external benchmark (OWASP/academic corpora) is the correct next step and is
 listed as future work in docs/PROJECT_BLUEPRINT.md §10.
 
-| Layer | Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |
+| Layer | Precision | Recall (95% CI) | F1 | Accuracy | TP | FP | FN | TN |
 |---|---|---|---|---|---|---|---|---|
 {row("Full ensemble", r["full_ensemble"])}
 {row("Heuristics only", r["heuristics_only"])}
@@ -108,7 +141,9 @@ listed as future work in docs/PROJECT_BLUEPRINT.md §10.
 {misses}
 
 Interpretation: the full ensemble is what ships. Layer rows exist to show each layer's
-contribution and that the ensemble is not a single point of failure.
+contribution and that the ensemble is not a single point of failure. Recall CI is a
+bootstrap 95% interval (n={r["full_ensemble"]["tp"] + r["full_ensemble"]["fn"]} positives,
+seed 42) — small sets carry wide intervals, and that uncertainty is part of the result.
 """
 
 
@@ -123,6 +158,9 @@ def run_eval() -> dict:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             r = pool.submit(asyncio.run, run_eval_async()).result()
     REPORT_PATH.write_text(render_report(r), encoding="utf-8")
+    # Machine-readable companion for CI gates and dashboards.
+    (ROOT / "evals" / "report.json").write_text(
+        json.dumps({"held_out": r}, default=str, indent=2), encoding="utf-8")
     return r
 
 

@@ -224,7 +224,7 @@ The chassis is deliberately prompt-agnostic. Mapping rules:
 
 ## 12. Verification protocol (what "done" means)
 
-`evals/verify_system.py` must print all-green across **13 checks**: syntax compile of every
+`evals/verify_system.py` must print all-green across **16 checks**: syntax compile of every
 module, TestClient pass over all nine endpoints, dev-suite metrics computed, eval report exists
 and is fresh, audit log records, tool guard blocks, demo scenario runs, dashboard serves 200
 headless, egress defense catches outbound secrets, canary tripwire fires, feedback loop records,

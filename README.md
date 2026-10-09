@@ -10,7 +10,7 @@ audit log, measures itself against an **independent public benchmark**, and impr
 **human feedback**.
 
 > ForgeHacks 2026 submission · Track: **AI + Cybersecurity**
-> Status: complete and verified — 13-point verification all green, 18 tests passing.
+> Status: complete and verified — 16-point verification all green, 28 tests passing.
 
 ## Why this matters
 
@@ -32,7 +32,7 @@ flowchart LR
     end
 
     subgraph Sentinel["Sentinel Core (FastAPI)"]
-        H["Layer 1 — Heuristics<br/>13 deterministic rules"]
+        H["Layer 1 — Heuristics<br/>14 deterministic rules + invisible-character detector"]
         S["Layer 2 — Semantic<br/>Gemini embeddings vs attack corpus<br/>(offline TF-IDF fallback)"]
         J["Layer 3 — LLM judges<br/>Gemini structured verdict<br/>+ Featherless open model<br/>(disagreement surfaced)"]
         M["Ensemble merge<br/>corroboration principle<br/>fail-closed"]
@@ -63,7 +63,7 @@ flowchart LR
 
 | Layer | What | Latency |
 |---|---|---|
-| 1. Heuristics | 13 rules: direct/indirect injection, jailbreaks, tool hijacking, exfiltration, phishing, non-English injection phrases | <1 ms |
+| 1. Heuristics | 14 rules: direct/indirect injection, jailbreaks, tool hijacking, exfiltration, phishing, non-English injection phrases | <1 ms |
 | 2. Semantic | similarity vs labeled attack corpus — Gemini embeddings online, **offline TF-IDF fallback**; uncorroborated hits need ≥0.70 similarity (corroboration principle) | ~ms offline |
 | 3. LLM judges | **Gemini** structured output (class, risk 0–10, confidence, verbatim evidence); **Featherless-hosted open model** joins when configured — judge disagreement is surfaced, higher-risk verdict wins (fail-closed) | ~1 s |
 | Egress | canary tripwire (certain-exfiltration detector), credential shapes (AWS/GitHub/Slack/Google/OpenAI keys, JWTs, private-key blocks), verbatim system-prompt echo | <1 ms |
@@ -77,7 +77,7 @@ egress echo check + canary tripwire.
 
 | Suite | n | Precision | Recall | F1 | What it proves |
 |---|---|---|---|---|---|
-| Dev suite (`simulator/suite.py`) | 25 | 1.00 | 1.00 | 1.00 | ⚠️ co-designed with the rules — regression guard, **not** generalization |
+| Dev suite (`simulator/suite.py`) | 41 | 1.00 | 1.00 | 1.00 | ⚠️ co-designed with the rules — regression guard, **not** generalization |
 | Held-out (`evals/run_eval.py`) | 26 | 1.00 | 1.00 | 1.00 | author-built after rules were frozen; tuning loop saw its misses (disclosed in report) |
 | **External benchmark (`evals/run_external_eval.py`)** | **546** | **1.00** | **0.12** | 0.22 | **public dataset ([deepset/prompt-injections](https://huggingface.co/datasets/deepset/prompt-injections)), never used in tuning — the number to trust most** |
 
@@ -122,10 +122,10 @@ the feedback loop.
 ## Verify everything yourself
 
 ```bash
-.venv\Scripts\python.exe -m pytest tests/ -q             # 18 tests
+.venv\Scripts\python.exe -m pytest tests/ -q             # 28 tests
 .venv\Scripts\python.exe -m evals.run_eval               # held-out report
 .venv\Scripts\python.exe -m evals.run_external_eval      # external benchmark
-.venv\Scripts\python.exe -m evals.verify_system          # 13-point chain-of-verification
+.venv\Scripts\python.exe -m evals.verify_system          # 16-point chain-of-verification
 ```
 
 CI runs the same suite on every push (`.github/workflows/ci.yml`).
@@ -141,7 +141,7 @@ agent-sentinel/
 ├── dashboard/app.py                   Streamlit UI (7 tabs incl. egress + analytics)
 ├── simulator/                         dev attack suite + scripted demo scenario
 ├── evals/                             held-out set, external benchmark, verification
-├── tests/                             pytest suite (18 tests)
+├── tests/                             pytest suite (28 tests)
 ├── Dockerfile, docker-compose.yml     containerized deployment (API + dashboard)
 └── .github/workflows/ci.yml           CI: tests + evals on every push
 ```

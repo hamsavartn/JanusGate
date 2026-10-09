@@ -1,18 +1,19 @@
 """Layer 2 — semantic similarity against the labeled attack corpus.
 
-Two modes, same interface:
-  - ONLINE:  Gemini embeddings (gemini-embedding-001), batched, cached on disk
-             (data/embeddings_cache.json) so repeated runs don't re-bill.
-  - OFFLINE: local TF-IDF (word unigrams + bigrams, sublinear tf, idf) with cosine
-             similarity — zero API calls, used automatically when no key is set
-             or the API call fails for any reason.
+Two channels, combined by max:
+  - WORD channel: word unigrams + bigrams, TF-IDF + cosine (precise on literal overlap)
+  - CHAR channel: character 3-5-gram TF-IDF + cosine (robust to paraphrase, leetspeak,
+    separator tricks)
 
-Both modes return the same SemanticHit or None. This layer must never raise.
+Both channels operate on normalized text (NFKC + zero-width removal + light leet
+un-mapping in the char channel). Online mode (GEMINI_API_KEY) replaces both with Gemini
+embeddings + a disk cache. This layer must never raise.
 """
 import hashlib
 import json
 import math
 import re
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -26,46 +27,60 @@ from backend.schemas import SemanticHit
 # against the held-out eval set (docs/PROJECT_BLUEPRINT.md §9).
 SIMILARITY_THRESHOLD = 0.35
 
-_TOKEN_RE = re.compile(r"[a-z0-9]{2,}|https?://\S+|\S+\.(?:com|net|org|io|ly|xyz|ru|top)\S*", re.IGNORECASE)
-
-_corpus_texts: list[str] | None = None
-_corpus_categories: list[str] | None = None
-_vectors: np.ndarray | None = None  # normalized rows
-_mode: str | None = None  # "gemini" | "tfidf"
-_CACHE_PATH = ROOT / "data" / "embeddings_cache.json"
+_INVISIBLE_RE = re.compile(r"[\u200b-\u200f\u2060-\u2064\u206a-\u206f\ufeff\xad]")
+_LEET_RE = re.compile(r"[01@$]|\$")
+_LEET_MAP = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t",
+                           "@": "a", "$": "s", "!": "i"})
+_WORD_RE = re.compile(r"[a-z0-9]{2,}|https?://\S+|\S+\.(?:com|net|org|io|ly|xyz|ru|top)\S*")
 
 
-def _tokenize(text: str) -> list[str]:
-    toks = [t.lower() for t in _TOKEN_RE.findall(text)]
+def normalize_text(text: str, leet: bool = False) -> str:
+    t = _INVISIBLE_RE.sub("", unicodedata.normalize("NFKC", text)).lower()
+    if leet:
+        t = t.translate(_LEET_MAP)
+    return t
+
+
+def _word_tokens(text: str) -> list[str]:
+    toks = _WORD_RE.findall(normalize_text(text))
     return toks + [f"{a}_{b}" for a, b in zip(toks, toks[1:])]
 
 
-def _build_tfidf_matrix(texts: list[str]) -> np.ndarray:
-    n = len(texts)
-    tokenized = [_tokenize(t) for t in texts]
+def _char_tokens(text: str) -> list[str]:
+    t = normalize_text(text, leet=True)
+    t = re.sub(r"[^a-z0-9]+", " ", t)
+    grams: list[str] = []
+    for word in t.split():
+        padded = f" {word} "
+        for n in (3, 4, 5):
+            grams.extend(padded[i:i + n] for i in range(len(padded) - n + 1))
+    return grams
+
+
+def _tfidf_vectorize(token_lists: list[list[str]]) -> tuple[np.ndarray, dict[str, int], dict[str, float]]:
+    n = len(token_lists)
     df: dict[str, int] = {}
-    for toks in tokenized:
+    for toks in token_lists:
         for tok in set(toks):
             df[tok] = df.get(tok, 0) + 1
-    idf = {tok: math.log((n + 1) / (count + 1)) + 1.0 for tok, count in df.items()}
+    idf = {tok: math.log((n + 1) / (c + 1)) + 1.0 for tok, c in df.items()}
     vocab = {tok: i for i, tok in enumerate(sorted(idf))}
     mat = np.zeros((n, len(vocab)), dtype=np.float32)
-    for r, toks in enumerate(tokenized):
+    for r, toks in enumerate(token_lists):
         counts: dict[str, int] = {}
         for tok in toks:
             counts[tok] = counts.get(tok, 0) + 1
         for tok, c in counts.items():
-            tf = 1.0 + math.log(c)  # sublinear tf
-            mat[r, vocab[tok]] = tf * idf[tok]
+            mat[r, vocab[tok]] = (1.0 + math.log(c)) * idf[tok]
     norms = np.linalg.norm(mat, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
-    return mat / norms
+    return mat / norms, vocab, idf
 
 
-def _tfidf_vector(text: str, vocab: dict[str, int], idf: dict[str, float]) -> np.ndarray:
+def _project(tokens: list[str], vocab: dict[str, int], idf: dict[str, float]) -> np.ndarray:
     vec = np.zeros(len(vocab), dtype=np.float32)
     counts: dict[str, int] = {}
-    for tok in _tokenize(text):
+    for tok in tokens:
         counts[tok] = counts.get(tok, 0) + 1
     for tok, c in counts.items():
         if tok in vocab:
@@ -74,8 +89,14 @@ def _tfidf_vector(text: str, vocab: dict[str, int], idf: dict[str, float]) -> np
     return vec / norm if norm > 0 else vec
 
 
-_tfidf_vocab: dict[str, int] | None = None
-_tfidf_idf: dict[str, float] | None = None
+_corpus_texts: list[str] | None = None
+_corpus_categories: list[str] | None = None
+_word_mat: np.ndarray | None = None
+_char_mat: np.ndarray | None = None
+_word_vocab = _word_idf = _char_vocab = _char_idf = None
+_gemini_vecs: np.ndarray | None = None
+_mode: str | None = None  # "gemini" | "tfidf"
+_CACHE_PATH = ROOT / "data" / "embeddings_cache.json"
 
 
 def _gemini_embed(texts: list[str]) -> list[list[float]] | None:
@@ -97,19 +118,11 @@ def _gemini_embed(texts: list[str]) -> list[list[float]] | None:
         return None
 
 
-def _load_cache() -> dict:
-    if _CACHE_PATH.exists():
-        try:
-            return json.loads(_CACHE_PATH.read_text())
-        except Exception:
-            return {}
-    return {}
-
-
 def _ensure_ready() -> bool:
     """Build (or fetch cached) corpus vectors. Idempotent; never raises."""
-    global _corpus_texts, _corpus_categories, _vectors, _mode, _tfidf_vocab, _tfidf_idf
-    if _vectors is not None:
+    global _corpus_texts, _corpus_categories, _word_mat, _char_mat, _gemini_vecs
+    global _word_vocab, _word_idf, _char_vocab, _char_idf, _mode
+    if _word_mat is not None or _gemini_vecs is not None:
         return True
 
     _corpus_texts = [p.text for p in ATTACK_PAYLOADS]
@@ -121,7 +134,7 @@ def _ensure_ready() -> bool:
         ).hexdigest()
         cache = _load_cache()
         if cache.get("key") == key:
-            _vectors = np.array(cache["vectors"], dtype=np.float32)
+            _gemini_vecs = np.array(cache["vectors"], dtype=np.float32)
             _mode = "gemini"
             return True
         vecs = _gemini_embed(_corpus_texts)
@@ -129,65 +142,58 @@ def _ensure_ready() -> bool:
             mat = np.array(vecs, dtype=np.float32)
             norms = np.linalg.norm(mat, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
-            _vectors = mat / norms
+            _gemini_vecs = mat / norms
             _mode = "gemini"
             try:
                 _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-                _CACHE_PATH.write_text(
-                    json.dumps({"key": key, "vectors": _vectors.tolist()})
-                )
+                _CACHE_PATH.write_text(json.dumps({"key": key, "vectors": _gemini_vecs.tolist()}))
             except Exception:
                 pass
             return True
 
-    # Offline fallback: TF-IDF over the same corpus
-    _vectors = _build_tfidf_matrix(_corpus_texts)
-    _tfidf_vocab = {}
-    idf: dict[str, float] = {}
-    # rebuild vocab+idf from the corpus tokenization (must match _build_tfidf_matrix)
-    n = len(_corpus_texts)
-    tokenized = [_tokenize(t) for t in _corpus_texts]
-    df: dict[str, int] = {}
-    for toks in tokenized:
-        for tok in set(toks):
-            df[tok] = df.get(tok, 0) + 1
-    idf = {tok: math.log((n + 1) / (c + 1)) + 1.0 for tok, c in df.items()}
-    _tfidf_vocab = {tok: i for i, tok in enumerate(sorted(idf))}
-    _tfidf_idf = idf
+    word_lists = [_word_tokens(t) for t in _corpus_texts]
+    char_lists = [_char_tokens(t) for t in _corpus_texts]
+    _word_mat, _word_vocab, _word_idf = _tfidf_vectorize(word_lists)
+    _char_mat, _char_vocab, _char_idf = _tfidf_vectorize(char_lists)
     _mode = "tfidf"
     return True
 
 
+def _load_cache() -> dict:
+    if _CACHE_PATH.exists():
+        try:
+            return json.loads(_CACHE_PATH.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
 def semantic_mode() -> str:
-    """Return the active mode without initializing: 'gemini', 'tfidf', or 'uninitialized'."""
-    if _mode is None:
-        return "gemini" if GEMINI_API_KEY else "tfidf"
-    return _mode
-
-
-def _embed_query(text: str) -> np.ndarray | None:
-    if not _ensure_ready():
-        return None
-    if _mode == "gemini":
-        vecs = _gemini_embed([text])
-        if vecs is None:
-            return None
-        v = np.array(vecs[0], dtype=np.float32)
-        norm = np.linalg.norm(v)
-        return v / norm if norm > 0 else v
-    assert _tfidf_vocab is not None and _tfidf_idf is not None
-    return _tfidf_vector(text, _tfidf_vocab, _tfidf_idf)
+    return _mode if _mode is not None else ("gemini" if GEMINI_API_KEY else "tfidf")
 
 
 def semantic_scan(text: str) -> SemanticHit | None:
-    """Compare text to the attack corpus; return a hit when similarity >= threshold."""
+    """Compare text to the attack corpus across channels; hit when sim >= threshold."""
     try:
         if not _ensure_ready():
             return None
-        q = _embed_query(text)
-        if q is None:
-            return None
-        sims = _vectors @ q  # type: ignore[operator]
+
+        if _mode == "gemini" and _gemini_vecs is not None:
+            vecs = _gemini_embed([text])
+            if vecs is None:
+                return None
+            v = np.array(vecs[0], dtype=np.float32)
+            norm = np.linalg.norm(v)
+            if norm > 0:
+                v = v / norm
+            sims = _gemini_vecs @ v
+        else:
+            word_sim = _word_mat @ _project(_word_tokens(text), _word_vocab, _word_idf) \
+                if _word_mat is not None else np.zeros(1)
+            char_sim = _char_mat @ _project(_char_tokens(text), _char_vocab, _char_idf) \
+                if _char_mat is not None else np.zeros(1)
+            sims = np.maximum(word_sim, char_sim)
+
         best = int(np.argmax(sims))
         score = float(sims[best])
         if score < SIMILARITY_THRESHOLD:
