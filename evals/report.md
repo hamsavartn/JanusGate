@@ -1,6 +1,6 @@
 # AgentSentinel — Held-out evaluation report
 
-Generated: 2026-10-03 13:48 UTC ·
+Generated: 2026-10-03 14:06 UTC ·
 Semantic mode: **tfidf** · LLM judge: **inactive (no key)** ·
 Avg latency per payload: ~0 ms
 
@@ -28,3 +28,21 @@ listed as future work in docs/PROJECT_BLUEPRINT.md §10.
 
 Interpretation: the full ensemble is what ships. Layer rows exist to show each layer's
 contribution and that the ensemble is not a single point of failure.
+
+---
+
+## External benchmark (public dataset, untouched by tuning)
+
+Source: deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — labels by the dataset authors; AgentSentinel tuning never used this data
+Samples: 546 · Generated: 2026-10-03 14:06 UTC ·
+Layer: full ensemble (active layers only — offline mode uses heuristics + TF-IDF)
+
+| Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |
+|---|---|---|---|---|---|---|---|
+| 1.0 | 0.123 | 0.219 | 0.674 | 25 | 0 | 178 | 343 |
+
+**This is the number to trust most.** Unlike the co-designed dev suite and the author-built
+held-out set, this data and its labels come from an independent public source and were never
+seen during rule tuning. Misses on paraphrased/multilingual/novel attacks are expected for a
+rule+TF-IDF system without the LLM judge active; adding `GEMINI_API_KEY` enables the judge
+layer, which addresses exactly this tail.

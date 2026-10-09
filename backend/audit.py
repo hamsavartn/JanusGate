@@ -13,9 +13,24 @@ from backend.schemas import EnsembleVerdict
 AUDIT_PATH = Path(os.getenv("SENTINEL_AUDIT_PATH", ROOT / "data" / "audit_log.jsonl"))
 
 
+def record_egress(verdict, source: str = "agent_reply") -> None:
+    """Record an egress (output-side) verdict in the same JSONL log."""
+    entry = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "type": "egress",
+        "source": source,
+        "is_leak": verdict.is_leak,
+        "risk": verdict.risk,
+        "reasons": verdict.reasons,
+        "latency_ms": verdict.latency_ms,
+    }
+    _append(entry)
+
+
 def record(verdict: EnsembleVerdict, source: str) -> None:
     entry = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "type": "ingress",
         "source": source,
         "is_attack": verdict.is_attack,
         "attack_class": verdict.attack_class,
@@ -26,6 +41,14 @@ def record(verdict: EnsembleVerdict, source: str) -> None:
         "heuristic_hits": [h.model_dump() for h in verdict.heuristic_hits],
         "llm_verdict": verdict.llm_verdict.model_dump() if verdict.llm_verdict else None,
     }
+    _append(entry)
+
+
+def record_feedback(entry: dict) -> None:
+    _append({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "type": "feedback", **entry})
+
+
+def _append(entry: dict) -> None:
     try:
         AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
         with AUDIT_PATH.open("a", encoding="utf-8") as f:

@@ -6,7 +6,15 @@ Run from the repo root (agent-sentinel/):
 from fastapi import FastAPI
 
 from backend.config import GEMINI_API_KEY, SENTINEL_HOST, SENTINEL_PORT
-from backend.schemas import EnsembleVerdict, InspectRequest, ScenarioResult, SuiteResult
+from backend.schemas import (
+    EgressVerdict,
+    EnsembleVerdict,
+    FeedbackEntry,
+    InspectRequest,
+    OutputRequest,
+    ScenarioResult,
+    SuiteResult,
+)
 from backend.sentinel_core import inspect_text
 
 app = FastAPI(
@@ -82,6 +90,51 @@ async def demo_scenario() -> ScenarioResult:
     from simulator.scenarios import run_scenario_async
 
     return await run_scenario_async()
+
+
+@app.post("/inspect_output", response_model=EgressVerdict)
+async def inspect_output_endpoint(req: OutputRequest) -> EgressVerdict:
+    """Egress defense: inspect an agent REPLY for leaks (canary, credentials, echoes)."""
+    import time
+
+    from backend import audit
+    from backend.engine.egress import inspect_output
+
+    t0 = time.perf_counter()
+    verdict = inspect_output(req.text)
+    verdict = verdict.model_copy(update={"latency_ms": int((time.perf_counter() - t0) * 1000)})
+    audit.record_egress(verdict)
+    return verdict
+
+
+@app.get("/canary")
+def canary_status() -> dict:
+    """Reveal the active canary token (so demos/tests can plant it in a fake reply)."""
+    from backend.config import SENTINEL_CANARY_TOKEN
+
+    return {"canary_active": bool(SENTINEL_CANARY_TOKEN), "token": SENTINEL_CANARY_TOKEN,
+            "note": "Plant this token in your system prompt. If it ever appears in a reply, "
+                    "exfiltration of the system prompt is certain."}
+
+
+@app.post("/feedback")
+def feedback(entry: FeedbackEntry) -> dict:
+    """Human feedback on a verdict — recorded for the continuous-improvement loop."""
+    from backend import audit
+
+    audit.record_feedback(entry.model_dump())
+    return {"status": "recorded", "stats": feedback_stats()}
+
+
+@app.get("/feedback/stats")
+def feedback_stats() -> dict:
+    from backend import audit
+
+    entries = [e for e in audit.query(limit=10000) if e.get("type") == "feedback"]
+    total = len(entries)
+    wrong = sum(1 for e in entries if not e.get("correct"))
+    return {"total": total, "marked_wrong": wrong,
+            "agreement_rate": round((total - wrong) / total, 3) if total else None}
 
 
 if __name__ == "__main__":

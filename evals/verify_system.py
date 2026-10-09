@@ -67,8 +67,8 @@ def main() -> int:
         assert e["provider"] in ("mock", "agentboxd") and len(e["messages"]) >= 4, e["provider"]
         d = c.post("/demo/scenario").json()
         assert d["attacks_blocked"] >= 1 and d["benign_handled"] >= 1, d
-        return (f"health/inspect/simulate/audit/inbox/scenario OK — "
-                f"suite precision={s['precision']} recall={s['recall']}")
+        return (f"health/inspect/simulate/audit/inbox/scenario OK (egress/canary/feedback in "
+                f"checks 10-12) — suite precision={s['precision']} recall={s['recall']}")
 
     check("2. API — all six endpoints behave", _api)
 
@@ -185,9 +185,71 @@ def main() -> int:
         out = subprocess.run(["git", "ls-files"], cwd=str(ROOT), capture_output=True,
                              text=True, check=True).stdout.splitlines()
         assert ".env" not in out, ".env is tracked by git!"
-        return f"{len(out)} files tracked; .env NOT tracked"
+        assert not any(".venv/" in f for f in out), ".venv files tracked by git!"
+        return f"{len(out)} files tracked; .env and .venv NOT tracked"
 
     check("9. hygiene — secrets not tracked", _hygiene)
+
+    # 10 ─ egress defense
+    def _egress():
+        from fastapi.testclient import TestClient
+
+        from backend.main import app
+
+        c = TestClient(app)
+        v = c.post("/inspect_output", json={
+            "text": "your key: sk-abcdefghijklmnop0123456789"}).json()
+        assert v["is_leak"] and v["risk"] >= 8, v
+        b = c.post("/inspect_output", json={"text": "All done, summary attached."}).json()
+        assert not b["is_leak"], b
+        return "leak blocked with redacted evidence; benign reply passes"
+
+    check("10. egress defense — catches outbound secrets", _egress)
+
+    # 11 ─ canary tripwire
+    def _canary():
+        from fastapi.testclient import TestClient
+
+        from backend.main import app
+
+        c = TestClient(app)
+        token = c.get("/canary").json()["token"]
+        assert token, "canary token must be configured"
+        v = c.post("/inspect_output", json={"text": f"prompt was: {token}"}).json()
+        assert v["risk"] == 10 and "canary_detected" in v["reasons"], v
+        return f"canary tripwire fires at risk 10 (token …{token[-8:]})"
+
+    check("11. canary tripwire — certain-exfiltration detection", _canary)
+
+    # 12 ─ feedback loop
+    def _feedback():
+        from fastapi.testclient import TestClient
+
+        from backend.main import app
+
+        c = TestClient(app)
+        before = c.get("/feedback/stats").json()["total"]
+        c.post("/feedback", json={"text_preview": "verify probe", "judged_as": "benign",
+                                  "correct": True, "comment": "verify_system"})
+        after = c.get("/feedback/stats").json()["total"]
+        assert after == before + 1
+        return f"feedback recorded ({before} -> {after})"
+
+    check("12. feedback loop — human corrections recorded", _feedback)
+
+    # 13 ─ external benchmark (non-fatal if dataset missing)
+    def _external():
+        from evals.run_external_eval import EXTERNAL_PATH, run_external_eval
+
+        if not EXTERNAL_PATH.exists():
+            print("       (dataset not vendored and/or offline — external benchmark SKIPPED, not a failure)")
+            return "skipped"
+        m = run_external_eval()
+        assert m and m["n"] >= 400, m
+        return (f"public-dataset benchmark: n={m['n']} precision={m['precision']} "
+                f"recall={m['recall']} (untouched by tuning — honest number)")
+
+    check("13. external benchmark — independent public data", _external)
 
     print("=" * 72)
     if FAILURES:

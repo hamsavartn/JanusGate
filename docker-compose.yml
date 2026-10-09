@@ -1,0 +1,28 @@
+# AgentSentinel — API + dashboard, one command:
+#   docker compose up --build
+#   API: http://localhost:8123/docs · Dashboard: http://localhost:8501
+services:
+  api:
+    build: .
+    ports:
+      - "8123:8123"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - FEATHERLESS_API_KEY=${FEATHERLESS_API_KEY:-}
+      - SENTINEL_CANARY_TOKEN=${SENTINEL_CANARY_TOKEN:-}
+      - SENTINEL_SYSTEM_PROMPT=${SENTINEL_SYSTEM_PROMPT:-}
+    volumes:
+      - sentinel-data:/app/data
+
+  dashboard:
+    build: .
+    command: streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_URL=http://api:8123
+    depends_on:
+      - api
+
+volumes:
+  sentinel-data:

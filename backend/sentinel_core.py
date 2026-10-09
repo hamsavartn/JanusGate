@@ -1,19 +1,21 @@
 """Sentinel Core — merges detection layers into one ensemble verdict.
 
-Layers:
-  1. heuristics   (always on, deterministic)
+Layers (run concurrently where they do I/O):
+  1. heuristics   (always on, deterministic, <1 ms)
   2. semantic     (corpus similarity — Gemini embeddings online, TF-IDF offline)
-  3. LLM judge    (Gemini structured output — active when GEMINI_API_KEY is set)
+  3. LLM judges   (Gemini primary; Featherless-hosted open model when configured —
+                   disagreement between judges is surfaced, higher-risk verdict wins)
 
 Merge policy: fail-closed on the strongest signal — the verdict is an attack if any
 layer reports an attack at/above threshold; final risk is the max across layers;
 attack class comes from the highest-risk layer.
 """
+import asyncio
 import time
 
 from backend.config import ATTACK_THRESHOLD
 from backend.engine import heuristics
-from backend.engine.judge import judge_text
+from backend.engine.judge_featherless import judge_with_available_models
 from backend.engine.semantic import semantic_scan
 from backend.schemas import AttackClass, EnsembleVerdict
 
@@ -36,9 +38,11 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
     hits = heuristics.scan(text)
     h_risk = heuristics.heuristic_risk(hits)
 
-    sem_hit = semantic_scan(text)
-
-    llm_verdict = judge_text(text, source)
+    # Semantic + LLM layers do network I/O — run them concurrently.
+    sem_hit, (llm_verdict, judges_disagree) = await asyncio.gather(
+        asyncio.to_thread(semantic_scan, text),
+        asyncio.to_thread(judge_with_available_models, text, source),
+    )
 
     layers = ["heuristics"]
     if sem_hit is not None:
@@ -82,6 +86,7 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
         heuristic_risk=h_risk,
         semantic_hit=sem_hit,
         llm_verdict=llm_verdict,
+        judges_disagree=judges_disagree,
         layers_used=layers,
         latency_ms=int((time.perf_counter() - t0) * 1000),
         text_preview=preview,

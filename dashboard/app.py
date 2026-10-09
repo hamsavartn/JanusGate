@@ -3,11 +3,13 @@
 Talks to the FastAPI backend over HTTP. Run from the repo root:
     .venv/Scripts/python.exe -m streamlit run dashboard/app.py
 """
+import os
+
 import httpx
 import pandas as pd
 import streamlit as st
 
-DEFAULT_BACKEND = "http://127.0.0.1:8123"
+DEFAULT_BACKEND = os.getenv("BACKEND_URL", "http://127.0.0.1:8123")
 
 st.set_page_config(
     page_title="AgentSentinel",
@@ -69,10 +71,10 @@ with st.sidebar:
         st.caption("Start it with: `.venv/Scripts/python.exe -m uvicorn backend.main:app --port 8123`")
 
 # ---------- main ----------
-inspect_tab, suite_tab, inbox_tab, scenario_tab, audit_tab, about_tab = st.tabs(
-    [":material/search: Inspector", ":material/bolt: Attack suite", ":material/mail: Agent inbox",
-     ":material/theater_comedy: Demo scenario", ":material/receipt_long: Audit log",
-     ":material/info: About"]
+inspect_tab, egress_tab, suite_tab, inbox_tab, scenario_tab, audit_tab, about_tab = st.tabs(
+    [":material/search: Inspector", ":material/logout: Egress & canary", ":material/bolt: Attack suite",
+     ":material/mail: Agent inbox", ":material/theater_comedy: Demo scenario",
+     ":material/receipt_long: Audit & analytics", ":material/info: About"]
 )
 
 # ----- Inspector -----
@@ -165,6 +167,51 @@ with inspect_tab:
                         "LLM judge inactive — set GEMINI_API_KEY in .env and restart the backend."
                     )
 
+# ----- Egress & canary -----
+with egress_tab:
+    st.subheader("Inspect what your agent is about to SEND")
+    st.caption(
+        "Ingress layers catch attacks coming in — this catches secrets going out: a canary "
+        "token planted in the system prompt (if it ever appears in a reply, exfiltration is "
+        "certain), credential shapes (API keys, JWTs, private keys), and verbatim system-prompt "
+        "echoes."
+    )
+    col_canary, col_scan = st.columns([1, 2])
+    with col_canary:
+        if st.button("Show canary token", icon=":material/key:"):
+            try:
+                c = httpx.get(f"{backend_url}/canary", timeout=5).json()
+                st.code(c["token"], language=None)
+                st.caption(c["note"])
+            except Exception:
+                st.error("Backend unreachable")
+    with col_scan:
+        reply = st.text_area(
+            "Agent reply to inspect",
+            height=140,
+            placeholder="Paste the agent's outgoing reply here…",
+        )
+    if st.button("Inspect reply", icon=":material/logout:", type="primary", disabled=not reply.strip()):
+        with st.spinner("Egress inspection…"):
+            try:
+                st.session_state["egress"] = httpx.post(
+                    f"{backend_url}/inspect_output", json={"text": reply.strip()}, timeout=30
+                ).json()
+            except Exception:
+                st.session_state["egress"] = None
+    ev = st.session_state.get("egress")
+    if ev:
+        if ev["is_leak"]:
+            st.error(
+                f"**:red[LEAK BLOCKED]** — {' + '.join(ev['reasons'])} · risk **{ev['risk']}/10** "
+                f"({ev['latency_ms']} ms)",
+                icon=":material/gpp_bad:",
+            )
+            for e in ev["evidence"]:
+                st.markdown(f"> {e}")
+        else:
+            st.success(f"Clean — no leaks detected ({ev['latency_ms']} ms)", icon=":material/verified_user:")
+
 # ----- Attack suite -----
 with suite_tab:
     st.subheader("Fire the labeled attack suite at the detection engine")
@@ -248,7 +295,7 @@ with scenario_tab:
     else:
         st.info("Run the scenario to watch the full defense story.")
 
-# ----- Audit log -----
+# ----- Audit & analytics -----
 with audit_tab:
     st.subheader("Audit log — every inspection, recorded")
     col_a, col_b, col_c = st.columns([2, 2, 1], vertical_alignment="bottom")
@@ -281,6 +328,52 @@ with audit_tab:
                 hide_index=True,
                 alt="Recent audit log entries with verdicts",
             )
+
+            with st.expander("Was a verdict wrong? Help the system improve"):
+                st.caption("Human feedback is recorded in the audit trail — the continuous-improvement loop.")
+                with st.form("feedback_form"):
+                    fb_preview = st.selectbox(
+                        "Which entry?",
+                        audit_df["text_preview"].tolist(),
+                        index=None,
+                        placeholder="Choose an inspected text…",
+                    )
+                    fb_correct = st.segmented_control("Was the verdict correct?", ["correct", "wrong"])
+                    fb_comment = st.text_input("Comment (optional)")
+                    if st.form_submit_button("Submit feedback", icon=":material/thumb_up:"):
+                        if fb_preview and fb_correct:
+                            r = httpx.post(
+                                f"{backend_url}/feedback",
+                                json={"text_preview": fb_preview, "judged_as":
+                                      str(audit_df.loc[audit_df['text_preview'] == fb_preview, 'attack_class'].iloc[0]),
+                                      "correct": fb_correct == "correct", "comment": fb_comment},
+                                timeout=10,
+                            )
+                            st.toast("Feedback recorded — thank you!", icon=":material/check:")
+                        else:
+                            st.warning("Pick an entry and a verdict first.")
+
+            # --- analytics ---
+            st.subheader("Analytics")
+            ingress = audit_df[audit_df.get("type", "ingress") == "ingress"] if "type" in audit_df else audit_df
+            left, right = st.columns(2)
+            with left:
+                with st.container(border=True):
+                    st.markdown("**Verdicts by class**")
+                    counts = ingress["attack_class"].value_counts()
+                    if len(counts):
+                        st.bar_chart(counts, alt="Count of verdicts by attack class")
+                    else:
+                        st.caption("No data yet.")
+            with right:
+                with st.container(border=True):
+                    st.markdown("**Risk distribution**")
+                    if len(ingress):
+                        risk_hist = ingress["final_risk"].value_counts().sort_index()
+                        risk_hist.index = [f"{i}/10" for i in risk_hist.index]
+                        st.bar_chart(risk_hist, alt="Count of inspections by final risk score")
+                    else:
+                        st.caption("No data yet.")
         else:
             st.info("No entries yet — run a scan or the demo scenario.")
     else:
@@ -295,15 +388,20 @@ with about_tab:
         an attack surface. Prompt injection, jailbreaks, tool hijacking, secret exfiltration, and
         phishing delivered straight into an agent's context are real, current attacks.
 
-        **AgentSentinel** is a firewall that inspects everything an agent is about to read, using a
-        three-layer ensemble:
+        **AgentSentinel** is a firewall that inspects everything an agent is about to read
+        *and send*, using a layered ensemble:
 
-        1. **Heuristics** — deterministic rules, instant, always on
-        2. **Semantic classifier** — embedding similarity against a curated attack corpus *(Day 2)*
-        3. **LLM judge** — Gemini structured-output verdict with evidence quotes and confidence
+        1. **Heuristics** — 13 deterministic rules, instant, always on
+        2. **Semantic classifier** — embedding similarity against a curated attack corpus
+           (Gemini embeddings online, TF-IDF offline), with a corroboration principle
+        3. **LLM judges** — Gemini structured-output verdicts; a second Featherless-hosted
+           open model joins when configured, and judge disagreement is surfaced
+        4. **Egress defense** — canary tripwire + credential-leak detection on agent replies
 
-        Every inspection produces an evidence-backed, auditable verdict — and the built-in attack
-        suite proves detection quality with live precision/recall metrics.
+        Every inspection produces an evidence-backed, auditable verdict. The built-in attack
+        suite proves detection quality with live precision/recall, a held-out set guards
+        against self-deception, and an **external benchmark** (public prompt-injection dataset,
+        never used in tuning) keeps the numbers honest.
         """
     )
     st.caption("ForgeHacks 2026 · Track: AI + Cybersecurity · Built Oct 3–10, 2026")

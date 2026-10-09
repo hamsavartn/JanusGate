@@ -34,13 +34,32 @@ class SemanticHit(BaseModel):
 
 
 class LLMJudgeVerdict(BaseModel):
-    """Structured verdict produced by the Gemini LLM judge."""
+    """Structured verdict produced by an LLM judge (Gemini or Featherless-hosted model)."""
     is_attack: bool
     attack_class: AttackClass
     risk_score: int = Field(ge=0, le=10, description="0 = clearly benign, 10 = critical attack")
     confidence: float = Field(ge=0.0, le=1.0)
     evidence: list[str] = Field(description="Short verbatim quotes that drove the verdict")
     reasoning: str
+    model: str | None = Field(default=None, description="Judge model that produced this verdict")
+
+
+class EgressVerdict(BaseModel):
+    """Verdict for agent OUTPUT (reply) — catches leaks, not attacks."""
+    is_leak: bool
+    risk: int = Field(ge=0, le=10)
+    reasons: list[str] = Field(description="e.g. 'canary_detected', 'api_key_pattern', 'system_prompt_echo'")
+    evidence: list[str]
+    latency_ms: int
+    canary_active: bool
+
+
+class FeedbackEntry(BaseModel):
+    """Human feedback on a verdict — feeds the continuous-improvement loop."""
+    text_preview: str
+    judged_as: str
+    correct: bool
+    comment: str = ""
 
 
 class EnsembleVerdict(BaseModel):
@@ -52,6 +71,7 @@ class EnsembleVerdict(BaseModel):
     heuristic_risk: int = Field(ge=0, le=10)
     semantic_hit: SemanticHit | None = None
     llm_verdict: LLMJudgeVerdict | None = None
+    judges_disagree: bool = Field(default=False, description="Multiple LLM judges disagreed on is_attack")
     layers_used: list[str]
     latency_ms: int
     text_preview: str
@@ -60,6 +80,10 @@ class EnsembleVerdict(BaseModel):
 class InspectRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
     source: Literal["user_message", "tool_output", "email", "document"] = "user_message"
+
+
+class OutputRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=20000, description="Agent reply text to inspect")
 
 
 class SuitePayloadResult(BaseModel):

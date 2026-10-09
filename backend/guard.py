@@ -52,9 +52,12 @@ class SentinelGuard:
     async def agent_reply(self, user_text: str) -> tuple[str, EnsembleVerdict]:
         """Checked generate step: inspect input, refuse on attack, else produce a reply.
 
-        Uses Gemini for the reply when a key is configured; otherwise a canned
-        acknowledgment so demos work fully offline.
+        Defense in depth: the generated reply itself passes egress inspection
+        (canary + credential leak detection) before it is returned.
         """
+        from backend import audit
+        from backend.engine.egress import inspect_output
+
         verdict = await self.check(user_text, source="user_message")
         if verdict.is_attack and verdict.final_risk >= self.threshold:
             evidence = (
@@ -66,6 +69,15 @@ class SentinelGuard:
             ), verdict
 
         reply = self._generate_stub(user_text)
+
+        egress = inspect_output(reply)
+        audit.record_egress(egress)
+        if egress.is_leak and egress.risk >= self.threshold:
+            return (
+                f"⛔ Reply blocked by AgentSentinel egress defense — "
+                f"{'/'.join(egress.reasons)} (risk {egress.risk}/10). The agent's output "
+                f"was stopped before leaving the system."
+            ), verdict
         return reply, verdict
 
     @staticmethod

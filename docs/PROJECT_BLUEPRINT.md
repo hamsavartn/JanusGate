@@ -8,18 +8,22 @@ intended. Last updated: Oct 3, 2026 (Day 1 of the hackathon, full build complete
 
 ## 1. What this is
 
-**AgentSentinel** is a security firewall and audit trail for AI agents. Modern AI agents read
-emails, documents, web pages, and tool outputs — text written by *other people*. That text becomes
-part of the agent's instructions ("context"). Attackers exploit this with **prompt injection**
-(hidden instructions inside an email or document), **jailbreaks**, **tool hijacking** (making the
-agent call tools on the attacker's behalf), **secret exfiltration**, and **phishing** delivered
-directly into the agent's context window.
+**AgentSentinel** is a two-way security firewall and audit trail for AI agents. Modern AI agents
+read emails, documents, web pages, and tool outputs — text written by *other people*. That text
+becomes part of the agent's instructions ("context"). Attackers exploit this with **prompt
+injection** (hidden instructions inside an email or document), **jailbreaks**, **tool hijacking**
+(making the agent call tools on the attacker's behalf), **secret exfiltration**, and
+**phishing** delivered directly into the agent's context window. Agents can also **leak**:
+echoing system prompts and credentials into their replies.
 
 AgentSentinel sits between the world and the agent. Every piece of text the agent is about to
 read passes through a detection ensemble that returns an **evidence-backed verdict** (attack?
-which class? risk 0–10? what exact quotes drove the decision?) — and every verdict is written to
-a tamper-evident-style audit log. A built-in attack simulator proves detection quality with live
-precision/recall/F1 numbers.
+which class? risk 0–10? what exact quotes drove the decision?) — and every reply the agent
+produces passes an **egress defense** (canary tripwire, credential-leak shapes, system-prompt
+echo detection). Every verdict is written to an audit log. Detection quality is measured on
+three suites: a co-designed dev suite (regression guard), an author-built held-out set, and an
+**independent public benchmark** (deepset/prompt-injections, 546 samples, never used in
+tuning) — with all three methodologies disclosed next to their numbers.
 
 ## 2. The event this is built for (facts, verified Oct 3, 2026)
 
@@ -111,20 +115,25 @@ flowchart LR
 | `backend/engine/heuristics.py` | Layer 1: 12 rules across 5 attack categories | Dev suite 100% (disclosed as co-designed) |
 | `backend/engine/corpus.py` | Dev corpus: 19 attack + 6 benign labeled payloads | Count assert in tests |
 | `backend/engine/semantic.py` | Layer 2: embeddings (Gemini) with cached vectors; offline TF-IDF cosine fallback | Improves recall on eval set vs heuristics-only; no crash without key |
-| `backend/engine/judge.py` | Layer 3: Gemini structured-output judge | Returns `None` cleanly with no key / API error |
-| `backend/sentinel_core.py` | Ensemble merge + risk/class decision | Verdict always well-formed |
-| `backend/audit.py` | JSONL audit log + query | `/audit` returns last N entries |
-| `backend/guard.py` | `SentinelGuard`: wrap tools / agent steps; `ToolBlocked` exception | Blocked demo scenario passes |
+| `backend/engine/judge.py` | Layer 3a: Gemini structured-output judge | Returns `None` cleanly with no key / API error |
+| `backend/engine/judge_featherless.py` | Layer 3b: Featherless-hosted open-model judge (sponsor integration); multi-judge merge with disagreement flag | `None` cleanly without key; merge fail-closed |
+| `backend/engine/egress.py` | Egress defense: canary tripwire, credential shapes, system-prompt echo | Blocks leaks with redacted evidence; benign replies pass |
+| `backend/sentinel_core.py` | Ensemble merge + risk/class decision; concurrent layer execution | Verdict always well-formed |
+| `backend/audit.py` | JSONL audit log + query (ingress, egress, feedback entries) | `/audit` returns last N entries |
+| `backend/guard.py` | `SentinelGuard`: wrap tools / agent steps; `ToolBlocked` exception; reply passes egress | Blocked demo scenario passes |
 | `backend/surfaces/email_inbox.py` | Inbox abstraction: mock provider (preset benign+attack mail) and Agentboxd adapter (used when `AGENTBOXD_API_KEY` set) | `/email/inbox` returns messages + verdicts |
 | `backend/main.py` | FastAPI: `/health` `/inspect` `/simulate` `/audit` `/email/inbox` `/demo/scenario` | TestClient tests green |
 | `simulator/suite.py` | Dev-suite runner + metrics | precision/recall/F1 printed |
 | `simulator/scenarios.py` | Scripted story demo: assistant + inbox, one injected mail gets blocked | `/demo/scenario` returns step-by-step result |
 | `evals/payloads_eval.py` | **Held-out** eval set (never tuned against) | Separate file from dev corpus |
 | `evals/run_eval.py` | Per-layer eval → `evals/report.md` | Report regenerable |
-| `evals/verify_system.py` | Chain-of-verification: boots API, exercises endpoints, checks secrets/git hygiene | All checks green |
-| `dashboard/app.py` | Streamlit UI, 5 tabs, dark theme | Headless run returns 200 |
-| `tests/test_api.py` | Endpoint tests | pytest green |
-| `Dockerfile` + `docs/deployment.md` | Deployment | docker build instructions documented |
+| `evals/external/prompt_injections.jsonl` | **Independent public benchmark** (deepset/prompt-injections, 546 samples, labels by dataset authors) | Vendored with attribution; refreshable |
+| `evals/run_external_eval.py` | Runs the ensemble on the public benchmark; appends section to report.md | Numbers regenerate; never used for tuning |
+| `evals/verify_system.py` | Chain-of-verification (13 points): boots API, exercises all endpoints, egress, canary, feedback, benchmark, secrets/git hygiene | All checks green |
+| `dashboard/app.py` | Streamlit UI, 7 tabs (Inspector, Egress & canary, Attack suite, Inbox, Scenario, Audit & analytics, About), dark theme | Headless run returns 200 |
+| `tests/test_api.py` | Endpoint tests (18) | pytest green |
+| `Dockerfile` + `docker-compose.yml` + `docs/deployment.md` | Deployment (API + dashboard) | compose up works |
+| `.github/workflows/ci.yml` | CI: compile + tests + evals on every push | green on GitHub |
 | `docs/devpost.md` | Submission copy | Fields match Devpost form |
 | `docs/demo-script.md` | 3.5-min video script with voiceover | Timeline ≤ 4 min |
 
@@ -177,9 +186,19 @@ The chassis is deliberately prompt-agnostic. Mapping rules:
 - **Dev corpus** (`backend/engine/corpus.py`): co-designed with the rules. Perfect scores on it
   are expected and must always be labeled "co-designed dev suite".
 - **Held-out eval** (`evals/payloads_eval.py`): written as a *separate* exercise from rule
-  tuning; rules/thresholds are tuned only on dev. Author-constructed (disclosed); integrating
-  public benchmarks (e.g., OWASP/academic injection corpora) is listed as future work.
-- Every published metric must be regenerated by `evals/run_eval.py` at submission time.
+  tuning; rules/thresholds are tuned only on dev. Author-constructed (disclosed); the tuning
+  loop did see its misses (fixes were generic patterns, never payload copies) — disclosed in
+  the report template itself.
+- **External benchmark** (`evals/external/prompt_injections.jsonl` +
+  `evals/run_external_eval.py`): 546 samples from the public
+  [deepset/prompt-injections](https://huggingface.co/datasets/deepset/prompt-injections)
+  dataset, vendored with attribution, **never used in tuning**. This is the most trustworthy
+  number: as of the current build it shows precision 1.00 (no false alarms on 343 real benign
+  texts) and recall 0.12 on novel real-world injection phrasings — the measured motivation for
+  the LLM-judge layer. **Do not tune against this set**; doing so would destroy its
+  independence.
+- Every published metric must be regenerated by `evals/run_eval.py` /
+  `evals/run_external_eval.py` at submission time.
 - LLM-judge numbers require `GEMINI_API_KEY`; without it, reports say "heuristics+semantic only".
 
 ## 10. Risk register
@@ -205,7 +224,10 @@ The chassis is deliberately prompt-agnostic. Mapping rules:
 
 ## 12. Verification protocol (what "done" means)
 
-`evals/verify_system.py` must print all-green: syntax compile of every module, TestClient pass
-over all six endpoints, dev-suite metrics computed, eval report exists and is fresh, dashboard
-imports + serves 200 headless, no secret values in tracked files, `.env` not tracked by git.
-Any red line = not done. Numbers reported to the user must come from that run, not memory.
+`evals/verify_system.py` must print all-green across **13 checks**: syntax compile of every
+module, TestClient pass over all nine endpoints, dev-suite metrics computed, eval report exists
+and is fresh, audit log records, tool guard blocks, demo scenario runs, dashboard serves 200
+headless, egress defense catches outbound secrets, canary tripwire fires, feedback loop records,
+external benchmark runs (non-fatal skip if dataset unavailable), and no secret values in
+tracked files. Any red line = not done. Numbers reported to the user must come from that run,
+not memory.
