@@ -1,0 +1,7 @@
+# AgentSentinel dashboard theme — dark security-ops look
+[theme]
+base = "dark"
+primaryColor = "#22c55e"
+backgroundColor = "#0b0f19"
+secondaryBackgroundColor = "#131a2b"
+textColor = "#e5e7eb"
