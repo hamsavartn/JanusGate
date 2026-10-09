@@ -82,9 +82,23 @@ scam report; (2) developers and small teams deploying AI agents who need drop-in
 - GitHub: [repo link — owner adds after push]
 
 ### How we answer the released track prompt
-> ⚠️ OWNER ACTION: paste the released AI + Cybersecurity track prompt here verbatim and add 2–3
-> sentences mapping AgentSentinel's features to it (docs/PROJECT_BLUEPRINT.md §8 has the
-> mapping playbook per prompt theme).
+The AI + Cybersecurity track prompt: "Build an AI-powered solution that helps people
+**recognize, prevent, verify, or respond to scams, impersonation, and fraud** enabled by AI or
+modern technologies."
+
+- **Recognize** — the 3-layer ingress ensemble + brand-impersonation/lookalike-domain detection
+  flag scam texts, AI-written phishing, and hijack attempts with evidence.
+- **Prevent** — SentinelGuard blocks attacked tool calls before execution; egress defense stops
+  credential/system-prompt leaks before they leave; the proxy blocks attacks before the model
+  even sees them.
+- **Verify** — every verdict carries verbatim evidence quotes and confidence; the audit log is
+  tamper-evident (hash chain); detection quality is measured on three suites including a public
+  dataset of 546 real samples, with methodologies and limits disclosed.
+- **Respond** — every scam report ends with the safe action (verify via official channel /
+  delete and report / do not click); the feedback loop lets humans correct verdicts.
+
+"Enabled by AI" cuts both ways and we handle both: scams written by AI targeting people, and
+scams targeting AI agents themselves (a hijacked assistant is a fraud machine).
 
 ## Submission checklist (all required for eligibility)
 - [x] Title + description

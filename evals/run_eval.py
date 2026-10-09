@@ -71,6 +71,7 @@ async def run_eval_async() -> dict:
     llm: list[tuple[bool, bool]] = []
     misses: list[str] = []
     latencies: list[int] = []
+    judge_ok = 0
     t0 = time.perf_counter()
 
     for p in EVAL_PAYLOADS:
@@ -78,6 +79,8 @@ async def run_eval_async() -> dict:
 
         v = await inspect_text(p.text, source="user_message", record=False)
         latencies.append(v.latency_ms)
+        if v.llm_verdict is not None:
+            judge_ok += 1
         full.append((expected, v.is_attack))
         heur.append((expected, v.heuristic_risk >= ATTACK_THRESHOLD))
         sem.append((expected, v.semantic_hit is not None and v.semantic_hit.severity >= ATTACK_THRESHOLD))
@@ -85,6 +88,8 @@ async def run_eval_async() -> dict:
             llm.append((expected, v.llm_verdict.is_attack and v.llm_verdict.risk_score >= ATTACK_THRESHOLD))
         if expected and not v.is_attack:
             misses.append(p.name)
+        if GEMINI_API_KEY:
+            time.sleep(6)  # free-tier pacing only when the judge is live
 
     results = {
         "full_ensemble": _prf(full),
@@ -95,6 +100,8 @@ async def run_eval_async() -> dict:
         "latency_ms": {"p50": _pctl(latencies, 0.50), "p95": _pctl(latencies, 0.95)},
         "mode": semantic_mode(),
         "llm_active": bool(GEMINI_API_KEY),
+        "judge_calls_ok": judge_ok,
+        "judge_calls_total": len(EVAL_PAYLOADS),
     }
     return results
 
@@ -103,7 +110,8 @@ def render_report(r: dict) -> str:
     def row(name: str, m: dict | None) -> str:
         if m is None:
             return f"| {name} | – | – | – | – | – | – | – | – |"
-        return (f"| {name} | {m['precision']} | {m['recall']} | {m['f1']} | {m['accuracy']} "
+        ci = f" [{m['recall_ci95'][0]}–{m['recall_ci95'][1]}]" if m.get("recall_ci95") else ""
+        return (f"| {name} | {m['precision']} | {m['recall']}{ci} | {m['f1']} | {m['accuracy']} "
                 f"| {m['tp']} | {m['fp']} | {m['fn']} | {m['tn']} |")
 
     llm_row = ""
@@ -117,6 +125,7 @@ def render_report(r: dict) -> str:
 
 Generated: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")} ·
 Semantic mode: **{r["mode"]}** · LLM judge: **{"active (Gemini)" if r["llm_active"] else "inactive (no key)"}** ·
+Judge verdicts obtained: **{r["judge_calls_ok"]}/{r["judge_calls_total"]}** (free-tier rate limits drop the rest; those payloads ran on heuristics+semantic) ·
 Latency p50/p95: {r["latency_ms"]["p50"]}/{r["latency_ms"]["p95"]} ms
 
 **Methodology (must be quoted wherever these numbers are published):** the eval set

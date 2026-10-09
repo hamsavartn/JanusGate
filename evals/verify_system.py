@@ -22,18 +22,32 @@ FAILURES: list[str] = []
 
 
 def check(name: str, fn):
+    print(f"[RUN ] {name}", flush=True)
     try:
         detail = fn()
-        print(f"[PASS] {name}" + (f" — {detail}" if detail else ""))
+        print(f"[PASS] {name}" + (f" — {detail}" if detail else ""), flush=True)
     except Exception as e:  # noqa: BLE001
         FAILURES.append(name)
-        print(f"[FAIL] {name} — {type(e).__name__}: {e}")
+        print(f"[FAIL] {name} — {type(e).__name__}: {e}", flush=True)
 
 
 def main() -> int:
     print("=" * 72)
-    print("AgentSentinel — chain of verification")
+    print("AgentSentinel — chain of verification (offline-deterministic mode: live-key")
+    print("measurement belongs to evals/run_eval.py and evals/run_external_eval.py)")
     print("=" * 72)
+
+    # Force offline layers so verification never depends on network/quota.
+    import backend.engine.judge as _judge
+    import backend.engine.judge_featherless as _jf
+    import backend.engine.semantic as _sem
+
+    _judge.GEMINI_API_KEY = ""
+    _jf.FEATHERLESS_API_KEY = ""
+    _sem.GEMINI_API_KEY = ""
+    _sem._gemini_vecs = None
+    _sem._word_mat = None
+    _sem._mode = None
 
     # 1 ─ compile everything
     def _compile():
@@ -244,8 +258,8 @@ def main() -> int:
         if not EXTERNAL_PATH.exists():
             print("       (dataset not vendored and/or offline — external benchmark SKIPPED, not a failure)")
             return "skipped"
-        m = run_external_eval()
-        assert m and m["n"] >= 400, m
+        m = run_external_eval(sample=120)  # integrity check — deterministic slice, offline
+        assert m and m["n"] >= 100, m
         return (f"external validation set: n={m['n']} precision={m['precision']} "
                 f"recall={m['recall']} (one disclosed calibration — see report)")
 

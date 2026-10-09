@@ -10,7 +10,7 @@ load_dotenv(find_dotenv(usecwd=True))
 ROOT = Path(__file__).resolve().parent.parent
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_JUDGE_MODEL = os.getenv("GEMINI_JUDGE_MODEL", "gemini-2.5-flash")
+GEMINI_JUDGE_MODEL = os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.8-flash")
 GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 
 FEATHERLESS_API_KEY = os.getenv("FEATHERLESS_API_KEY", "").strip()

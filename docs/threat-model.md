@@ -36,8 +36,13 @@ protect against*. Mapped to the OWASP LLM Top 10 (2025).
 ## Explicit non-goals / residual risks (honesty)
 - **No auth on this API by design** (demo scope) — deploy behind a gateway in production.
 - **In-memory session state** — single-process only; multi-worker needs a shared store.
-- **Rule+TF-IDF recall on novel attacks is limited** (external benchmark: recall 0.12) — the
-  LLM-judge layer exists for exactly this tail; activate `GEMINI_API_KEY`.
+- **Rule+TF-IDF recall on novel attacks is limited** (external validation set: recall 0.12) —
+  the LLM-judge layer exists for exactly this tail; activate `GEMINI_API_KEY`.
+- **The LLM judge is itself attackable** by the same injection techniques it classifies —
+  defense here is layered precisely because no single layer is trusted (external audit C22).
+- **Mode-aware corroboration boundaries**: gemini-embedding cosine similarities run much
+  higher than TF-IDF, so the standalone-attack similarity bar is 0.90 in gemini mode vs 0.70
+  in TF-IDF mode — both calibrated on the dev corpus only (never on eval/external sets).
 - **No streaming support** in proxy mode; **no HTML parsing** of emails (plain-text body only).
 - **Judge models can be fooled**; the ensemble's corroboration rules limit, but do not
   eliminate, adversarial evasion. Security is a process; the feedback loop is part of it.

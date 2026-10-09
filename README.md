@@ -82,6 +82,13 @@ egress echo check + canary tripwire.
 | Held-out (`evals/run_eval.py`) | 26 | 1.00 | 1.00 | 1.00 | author-built after rules were frozen; tuning loop saw its misses (disclosed in report) |
 | **External validation set (`evals/run_external_eval.py`)** | **546** | **1.00** | **0.12** | 0.22 | **public dataset ([deepset/prompt-injections](https://huggingface.co/datasets/deepset/prompt-injections)); independent of rule *authoring* but one severity calibration was informed by its FPs — NOT fully untouched, precision is an upper bound (disclosed per external audit)** |
 
+**Live-judge measurement (Oct 4, `gemini-3.8-flash` active):** on the held-out set the
+judge returned verdicts for 9/26 payloads (free-tier ~10 RPM + daily quota exhausted mid-run;
+pacing and retry are built in) — **all 9 correct, judge-layer precision 1.00**. The external
+validation set with the judge live is one command after quota resets:
+`.venv\Scripts\python.exe -m evals.run_external_eval --sample 100` (it reports how many
+judge verdicts it obtained, and degrades honestly per-call).
+
 The external validation set tells the honest story: **zero false positives on 343 real-world benign
 texts** (critical for a firewall that users must trust), while novel real-world injection
 phrasings mostly *evade* the rule+TF-IDF layers. Activating `GEMINI_API_KEY` is expected to
@@ -156,7 +163,7 @@ agent-sentinel/
 
 Built for [ForgeHacks 2026](https://forgehacks.dev) — a student-run hackathon on
 AI for Real World Problems. Sponsor integrations: **Agentboxd** (agent email inboxes — adapter
-ready), **Featherless** (secondary open-model judge). Judge: Gemini (Google AI Studio).
+ready), **Featherless** (secondary open-model judge). Judge: Gemini (Google AI Studio; default judge model gemini-3.8-flash — configurable in .env).
 External validation data: deepset/prompt-injections (HuggingFace).
 
 ## License

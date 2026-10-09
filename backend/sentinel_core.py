@@ -19,8 +19,12 @@ from backend.engine.judge_featherless import judge_with_available_models
 from backend.engine.semantic import semantic_scan
 from backend.schemas import AttackClass, EnsembleVerdict
 
-# Similarity at which an uncorroborated semantic hit may declare an attack by itself.
-SEMANTIC_ALONE_SIMILARITY = 0.70
+# Corroboration boundary for an UNCORROBORATED semantic hit, per mode — both values
+# picked from the DEV corpus separation band only (tfidf: benign max 0.247, attacks 1.0;
+# gemini: benign max 0.893, attacks 1.0 — embedding cosines run high, so gemini mode
+# declares standalone attacks only on near-verbatim corpus matches; paraphrases are the
+# LLM judge's job). Never tuned against the held-out or external sets.
+SEMANTIC_ALONE_SIMILARITY = {"tfidf": 0.70, "gemini": 0.90}
 
 # Maps heuristic/semantic categories onto the shared AttackClass vocabulary
 _CATEGORY_TO_CLASS: dict[str, AttackClass] = {
@@ -65,7 +69,8 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
         corroborated = h_risk >= ATTACK_THRESHOLD or (
             llm_verdict is not None and llm_verdict.is_attack
         )
-        if sem_hit.similarity >= SEMANTIC_ALONE_SIMILARITY or corroborated:
+        alone_needed = SEMANTIC_ALONE_SIMILARITY.get(sem_hit.mode, 0.90)
+        if sem_hit.similarity >= alone_needed or corroborated:
             candidates.append((sem_hit.severity, _CATEGORY_TO_CLASS[sem_hit.category]))
     if llm_verdict is not None and llm_verdict.is_attack:
         candidates.append((llm_verdict.risk_score, llm_verdict.attack_class))

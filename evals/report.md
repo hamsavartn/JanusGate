@@ -1,8 +1,9 @@
 # AgentSentinel — Held-out evaluation report
 
-Generated: 2026-10-04 14:41 UTC ·
-Semantic mode: **tfidf** · LLM judge: **inactive (no key)** ·
-Latency p50/p95: 1/1 ms
+Generated: 2026-10-04 19:29 UTC ·
+Semantic mode: **tfidf** · LLM judge: **active (Gemini)** ·
+Judge verdicts obtained: **0/26** (free-tier rate limits drop the rest; those payloads ran on heuristics+semantic) ·
+Latency p50/p95: 4/9 ms
 
 **Methodology (must be quoted wherever these numbers are published):** the eval set
 (`evals/payloads_eval.py`) is held out — written after the heuristic rules were frozen, with
@@ -20,9 +21,9 @@ listed as future work in docs/PROJECT_BLUEPRINT.md §10.
 
 | Layer | Precision | Recall (95% CI) | F1 | Accuracy | TP | FP | FN | TN |
 |---|---|---|---|---|---|---|---|---|
-| Full ensemble | 1.0 | 1.0 | 1.0 | 1.0 | 20 | 0 | 0 | 6 |
-| Heuristics only | 1.0 | 1.0 | 1.0 | 1.0 | 20 | 0 | 0 | 6 |
-| Semantic only | 0.875 | 0.35 | 0.5 | 0.462 | 7 | 1 | 13 | 5 |
+| Full ensemble | 1.0 | 1.0 [1.0–1.0] | 1.0 | 1.0 | 20 | 0 | 0 | 6 |
+| Heuristics only | 1.0 | 1.0 [1.0–1.0] | 1.0 | 1.0 | 20 | 0 | 0 | 6 |
+| Semantic only | 0.875 | 0.35 [0.15–0.556] | 0.5 | 0.462 | 7 | 1 | 13 | 5 |
 
 **Missed attacks (ensemble):** none
 
@@ -36,12 +37,12 @@ seed 42) — small sets carry wide intervals, and that uncertainty is part of th
 ## External validation set (public data — NOT fully untouched; honest status)
 
 Source: deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — labels by the dataset authors; AgentSentinel tuning never used this data
-Samples: 546 · Generated: 2026-10-04 14:41 UTC ·
-Layer: full ensemble (active layers only — offline mode uses heuristics + TF-IDF)
+Samples: deterministic stratified sample of **120** of 546 (class mix preserved) · Generated: 2026-10-04 19:41 UTC ·
+Layer: full ensemble (layers active per call) · Judge verdicts obtained: **0/120** (rate-limited calls degraded to heuristics+semantic); elapsed 12.0 min
 
 | Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |
 |---|---|---|---|---|---|---|---|
-| 1.0 | 0.123 | 0.219 | 0.674 | 25 | 0 | 178 | 343 |
+| 1.0 | 0.136 | 0.24 | 0.683 | 6 | 0 | 38 | 76 |
 
 **Honest status (re-labeled after external audit):** this set is independent of the rule
 AUTHORING, but it is NOT a pristine test set — one severity calibration (the invisible-char
