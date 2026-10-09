@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import httpx
 
 from backend.config import ROOT
+from backend.utils.html_parser import extract_text
 
 
 @dataclass
@@ -118,7 +119,7 @@ class AgentboxdInbox:
                     id=str(m.get("id", i)),
                     sender=str(m.get("sender") or m.get("from") or m.get("email") or "unknown"),
                     subject=str(m.get("subject") or m.get("title") or "(no subject)"),
-                    body=str(m.get("body") or m.get("text") or m.get("content") or ""),
+                    body=extract_text(str(m.get("body") or m.get("html") or m.get("text") or m.get("content") or "")),
                 )
                 for i, m in enumerate(items)
             ]
