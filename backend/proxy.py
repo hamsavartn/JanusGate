@@ -15,11 +15,13 @@ Flow per request:
 Non-streaming only (documented limitation). Without UPSTREAM_API_KEY the proxy still
 blocks attacks (no upstream needed for that) and returns 503 for clean traffic.
 """
+import json
 import time
 import uuid
 
 import httpx
 from fastapi import HTTPException
+from fastapi.responses import StreamingResponse
 
 from backend import audit
 from backend.config import UPSTREAM_API_KEY, UPSTREAM_BASE_URL, UPSTREAM_DEFAULT_MODEL
@@ -88,6 +90,18 @@ async def handle_chat_completions(payload: dict) -> dict:
         content = (f"⛔ [JanusGate] Request blocked — {worst['attack_class']} detected "
                    f"in the {worst['role']} message (risk {worst['risk']}/10). "
                    f"Evidence: “{worst['evidence']}”. The request was never sent upstream.")
+        if payload.get("stream"):
+            async def _stream_synthetic_block():
+                chunk = {
+                    "id": f"chatcmpl-janusgate-{uuid.uuid4().hex[:12]}",
+                    "object": "chat.completion.chunk",
+                    "model": model,
+                    "choices": [{"index": 0, "delta": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
+                    "sentinel": {"action": "blocked_ingress", "verdicts": ingress_results},
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(_stream_synthetic_block(), media_type="text/event-stream")
         return _synthetic_response(model, content, {
             "action": "blocked_ingress", "verdicts": ingress_results})
 
@@ -98,6 +112,63 @@ async def handle_chat_completions(payload: dict) -> dict:
                    "ingress inspection passed but forwarding is unavailable.")
 
     t0 = time.perf_counter()
+
+    if payload.get("stream"):
+        async def _stream_upstream():
+            async with httpx.AsyncClient() as client:
+                try:
+                    async with client.stream(
+                        "POST",
+                        f"{UPSTREAM_BASE_URL.rstrip('/')}/chat/completions",
+                        headers={"Authorization": f"Bearer {UPSTREAM_API_KEY}"},
+                        json=payload,
+                        timeout=120,
+                    ) as response:
+                        if response.status_code != 200:
+                            err = await response.aread()
+                            yield f"data: {json.dumps({'error': f'upstream error {response.status_code}', 'details': err.decode('utf-8', errors='ignore')})}\n\n"
+                            return
+                        
+                        accumulated_text = ""
+                        async for line in response.aiter_lines():
+                            if line.startswith("data: ") and line != "data: [DONE]":
+                                data_str = line[6:]
+                                try:
+                                    chunk = json.loads(data_str)
+                                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                                    if "content" in delta:
+                                        new_text = delta["content"]
+                                        test_text = accumulated_text + new_text
+                                        
+                                        egress = inspect_output(test_text)
+                                        if egress is not None and egress.is_leak and egress.risk >= 8:
+                                            block_msg = (f"\n\n⛔ [JanusGate] Reply blocked by egress defense — "
+                                                         f"{'/'.join(egress.reasons)} (risk {egress.risk}/10).")
+                                            block_chunk = {
+                                                "id": chunk.get("id", f"chatcmpl-janusgate-{uuid.uuid4().hex[:12]}"),
+                                                "object": "chat.completion.chunk",
+                                                "model": model,
+                                                "choices": [{"index": 0, "delta": {"content": block_msg}, "finish_reason": "stop"}],
+                                                "sentinel": {
+                                                    "action": "blocked_egress", "verdicts": ingress_results,
+                                                    "egress": {"reasons": egress.reasons, "risk": egress.risk}
+                                                }
+                                            }
+                                            yield f"data: {json.dumps(block_chunk)}\n\n"
+                                            yield "data: [DONE]\n\n"
+                                            
+                                            audit.record_egress(egress, source="proxy_stream")
+                                            return
+                                            
+                                        accumulated_text = test_text
+                                except Exception:
+                                    pass
+                            
+                            yield f"{line}\n"
+                except Exception:
+                    yield f"data: {json.dumps({'error': 'upstream unreachable'})}\n\n"
+        return StreamingResponse(_stream_upstream(), media_type="text/event-stream")
+
     try:
         r = httpx.post(
             f"{UPSTREAM_BASE_URL.rstrip('/')}/chat/completions",
