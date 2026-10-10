@@ -13,9 +13,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_JUDGE_MODEL = os.getenv("GEMINI_JUDGE_MODEL", "gemini-3.8-flash")
 GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 
-FEATHERLESS_API_KEY = os.getenv("FEATHERLESS_API_KEY", "").strip()
-FEATHERLESS_BASE_URL = os.getenv("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1")
-FEATHERLESS_JUDGE_MODEL = os.getenv("FEATHERLESS_JUDGE_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_JUDGE_MODEL = os.getenv("GROQ_JUDGE_MODEL", "qwen-2.5-32b") # Note: qwen-2.5-32b is the api ID for qwen3.8-27b on Groq, let me double check the exact model string, user's screenshot had qwen/qwen3.8-27b. I will use qwen/qwen3.8-27b.
+GROQ_JUDGE_MODEL = os.getenv("GROQ_JUDGE_MODEL", "qwen/qwen3.8-27b")
 
 # Egress defense: canary token planted in the system prompt; if it ever appears in an
 # agent reply, exfiltration is certain. Override via env; default is stable for tests.

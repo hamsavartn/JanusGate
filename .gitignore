@@ -24,3 +24,9 @@ build/
 
 # Runtime artifacts
 data/
+
+# Agent configuration and docs
+HANDOFF.md
+AGENT_CHANGELOG.md
+AGENTS.md
+.agents/

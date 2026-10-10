@@ -1,6 +1,6 @@
-"""Secondary LLM judge — Featherless-hosted open models (OpenAI-compatible API).
+"""Secondary LLM judge — Groq-hosted open models (OpenAI-compatible API).
 
-This is the ForgeHacks sponsor integration: when FEATHERLESS_API_KEY is set, a second,
+This is the integration: when GROQ_API_KEY is set, a second,
 independently-hosted open-source model judges every inspection alongside Gemini.
 Disagreement between judges is surfaced (`judges_disagree`) — judge diversity is a real
 defense against single-model blind spots.
@@ -12,7 +12,7 @@ import os
 
 import httpx
 
-from backend.config import FEATHERLESS_API_KEY, FEATHERLESS_BASE_URL, FEATHERLESS_JUDGE_MODEL
+from backend.config import GROQ_API_KEY, GROQ_BASE_URL, GROQ_JUDGE_MODEL
 from backend.schemas import LLMJudgeVerdict
 
 JUDGE_SYSTEM = """\
@@ -25,16 +25,16 @@ Respond with ONLY a JSON object, no markdown, exactly this shape:
 """
 
 
-def featherless_judge(text: str, source: str = "user_message") -> LLMJudgeVerdict | None:
-    if not FEATHERLESS_API_KEY:
+def groq_judge(text: str, source: str = "user_message") -> LLMJudgeVerdict | None:
+    if not GROQ_API_KEY:
         return None
     prompt = f"Source: {source}\nText to classify:\n<<<\n{text}\n>>>"
     try:
         r = httpx.post(
-            f"{FEATHERLESS_BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {FEATHERLESS_API_KEY}"},
+            f"{GROQ_BASE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
-                "model": FEATHERLESS_JUDGE_MODEL,
+                "model": GROQ_JUDGE_MODEL,
                 "messages": [
                     {"role": "system", "content": JUDGE_SYSTEM},
                     {"role": "user", "content": prompt},
@@ -58,7 +58,7 @@ def featherless_judge(text: str, source: str = "user_message") -> LLMJudgeVerdic
             "confidence": float(data.get("confidence", 0.5)),
             "evidence": list(data.get("evidence", []))[:5],
             "reasoning": str(data.get("reasoning", ""))[:500],
-            "model": FEATHERLESS_JUDGE_MODEL,
+            "model": GROQ_JUDGE_MODEL,
         })
         return verdict
     except Exception:
@@ -77,9 +77,9 @@ def judge_with_available_models(text: str, source: str) -> tuple[LLMJudgeVerdict
     gem = judge_text(text, source)
     if gem is not None:
         verdicts.append(gem.model_copy(update={"model": gem.model or "gemini"}))
-    fls = featherless_judge(text, source)
-    if fls is not None:
-        verdicts.append(fls)
+    groq_v = groq_judge(text, source)
+    if groq_v is not None:
+        verdicts.append(groq_v)
 
     if not verdicts:
         return None, False

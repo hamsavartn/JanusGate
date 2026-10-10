@@ -308,7 +308,7 @@ with inbox_tab:
                         st.warning(
                             f"**Scam report** — {scam['scam_type']} · risk {scam['risk']}/10 · "
                             f"signals: {', '.join(s['signal'] for s in scam['signals'])}",
-                            icon=":material/fraud_alert:",
+                            icon=":material/warning:",
                         )
                         st.markdown(f"**Do this:** {scam['advice']}")
                     else:
