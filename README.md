@@ -102,24 +102,61 @@ see docs/threat-model.md residual risks.)
 
 ## Run it
 
+### 1. Start the JanusGate Security Engine
+
+You can run JanusGate directly with Python or via Docker.
+
+**Via Docker (Recommended)**
 ```bash
+git clone https://github.com/yourusername/agent-sentinel.git
 cd agent-sentinel
 
+# Create .env and add your API keys (Free tiers work!)
+echo "GEMINI_API_KEY=your_gemini_key_here" > .env
+echo "GROQ_API_KEY=your_groq_key_here" >> .env
+
+docker-compose up -d --build
+```
+*API is now running on `http://localhost:8123` and the Dashboard is live at `http://localhost:8501`.*
+
+**Via Python**
+```bash
 # 1. create venv (Windows) — never install globally
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# 2. configure (optional but recommended)
-copy .env.example .env        # GEMINI_API_KEY, FEATHERLESS_API_KEY, canary, system prompt
+# 2. configure
+copy .env.example .env  # set GEMINI_API_KEY, GROQ_API_KEY
 
-# 3. backend
+# 3. backend (Terminal 1)
 .venv\Scripts\python.exe -m uvicorn backend.main:app --port 8123
 
-# 4. dashboard (second terminal)
+# 4. dashboard (Terminal 2)
 .venv\Scripts\python.exe -m streamlit run dashboard/app.py
 ```
 
-Or one command with Docker: `docker compose up --build` (API :8123 · dashboard :8501).
+### 2. Set Up the Automation (n8n)
+
+You can connect JanusGate to an AI Agent using n8n. 
+
+**Scenario A: Running n8n LOCALLY (Docker/Desktop)**
+1. Add an **Email Read (IMAP)** node to trigger on new emails.
+2. Add an **HTTP Request** node to scan the email. 
+   - **URL:** `http://host.docker.internal:8123/inspect` (or `localhost` depending on your OS)
+   - **Method:** POST
+   - **Body:** `{ "text": "={{ $json.text }}", "source": "email" }`
+3. Add an **If Node** checking if `{{ $json.is_attack }}` is `true`.
+4. If **False (Safe)**: Route to an **AI Agent Node** to execute the task.
+5. If **True (Malicious)**: Route to another **HTTP Request** pointing to `http://host.docker.internal:8123/scam_report` to generate the human warning, then send that warning to a Slack/Discord node.
+
+**Scenario B: Running n8n CLOUD**
+Since n8n Cloud is on the internet, it cannot reach `localhost:8123` on your laptop. You need to securely expose your local JanusGate API.
+1. Download [ngrok](https://ngrok.com/).
+2. Run `ngrok http 8123`.
+3. Ngrok will give you a public URL (e.g., `https://1a2b-3c4d.ngrok.app`).
+4. Build the exact same workflow as Scenario A, but in the **HTTP Request** nodes, replace `localhost:8123` with your new ngrok URL (e.g., `https://1a2b-3c4d.ngrok.app/inspect`).
+
+---
 
 API: `GET /health` · `POST /inspect` · `POST /inspect_output` · `GET /canary` · `POST /simulate` ·
 `GET /audit` · `GET /email/inbox` · `POST /demo/scenario` · `POST /feedback` · `GET /feedback/stats`
