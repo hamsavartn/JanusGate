@@ -11,6 +11,8 @@ JanusGate inspects **everything an agent reads and everything it sends**, return
 > ForgeHacks 2026 submission · Track: **AI + Cybersecurity**
 
 ## 🚀 Live Demos
+> 💡 **Tip for Judges:** We recommend opening both of these links at the same time in separate tabs! The Render API is on a free tier and may take ~30 seconds to spin up from sleep. 
+
 * **Dashboard (Streamlit):** [https://jansgate.streamlit.app/](https://jansgate.streamlit.app/)
 * **Core API (Render):** [https://janusgate-api.onrender.com/docs](https://janusgate-api.onrender.com/docs)
 
