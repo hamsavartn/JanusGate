@@ -11,7 +11,7 @@ JanusGate inspects **everything an agent reads and everything it sends**, return
 > ForgeHacks 2026 submission · Track: **AI + Cybersecurity**
 
 ## 🚀 Live Demos
-* **Dashboard (Streamlit):** [https://agent-sentinel.streamlit.app/](https://agent-sentinel.streamlit.app/) *(Assuming standard Streamlit naming, update if different!)*
+* **Dashboard (Streamlit):** [https://jansgate.streamlit.app/](https://jansgate.streamlit.app/)
 * **Core API (Render):** [https://janusgate-api.onrender.com/docs](https://janusgate-api.onrender.com/docs)
 
 ## Why this matters
