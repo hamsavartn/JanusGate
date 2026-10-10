@@ -11,7 +11,7 @@ def _offline_isolation(monkeypatch):
     import backend.engine.semantic as semantic
 
     monkeypatch.setattr(judge, "GEMINI_API_KEY", "")
-    monkeypatch.setattr(judge_featherless, "FEATHERLESS_API_KEY", "")
+    monkeypatch.setattr(judge_featherless, "GROQ_API_KEY", "")
     monkeypatch.setattr(semantic, "GEMINI_API_KEY", "")
     # Force the semantic layer to rebuild in TF-IDF mode (deterministic, no network).
     semantic._gemini_vecs = None

@@ -44,7 +44,7 @@ def main() -> int:
     import backend.engine.semantic as _sem
 
     _judge.GEMINI_API_KEY = ""
-    _jf.FEATHERLESS_API_KEY = ""
+    _jf.GROQ_API_KEY = ""
     _sem.GEMINI_API_KEY = ""
     _sem._gemini_vecs = None
     _sem._word_mat = None
