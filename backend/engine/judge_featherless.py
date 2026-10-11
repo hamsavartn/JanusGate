@@ -25,9 +25,9 @@ Respond with ONLY a JSON object, no markdown, exactly this shape:
 """
 
 
-def groq_judge(text: str, source: str = "user_message") -> LLMJudgeVerdict | None:
+def groq_judge(text: str, source: str = "user_message") -> tuple[LLMJudgeVerdict | None, str]:
     if not GROQ_API_KEY:
-        return None
+        return None, "skipped"
     prompt = f"Source: {source}\nText to classify:\n<<<\n{text}\n>>>"
     try:
         r = httpx.post(
@@ -49,7 +49,18 @@ def groq_judge(text: str, source: str = "user_message") -> LLMJudgeVerdict | Non
         # Robust JSON extraction: models sometimes wrap JSON in prose or fences.
         start, end = content.find("{"), content.rfind("}")
         if start == -1 or end <= start:
-            return None
+            low = content.lower()
+            if any(term in low for term in ["cannot fulfill", "cannot assist", "i am unable to", "against safety", "harmful content", "safety policy"]):
+                return LLMJudgeVerdict(
+                    is_attack=True,
+                    attack_class="jailbreak",
+                    risk_score=9,
+                    confidence=0.9,
+                    evidence=["Model refusal triggered by input text"],
+                    reasoning=f"Model refused input: {content[:200]}",
+                    model=GROQ_JUDGE_MODEL,
+                ), "ok"
+            return None, "error"
         data = json.loads(content[start:end + 1])
         verdict = LLMJudgeVerdict.model_validate({
             "is_attack": bool(data.get("is_attack", False)),
@@ -60,12 +71,14 @@ def groq_judge(text: str, source: str = "user_message") -> LLMJudgeVerdict | Non
             "reasoning": str(data.get("reasoning", ""))[:500],
             "model": GROQ_JUDGE_MODEL,
         })
-        return verdict
+        return verdict, "ok"
+    except httpx.TimeoutException:
+        return None, "timeout"
     except Exception:
-        return None
+        return None, "error"
 
 
-def judge_with_available_models(text: str, source: str) -> tuple[LLMJudgeVerdict | None, bool]:
+def judge_with_available_models(text: str, source: str) -> tuple[LLMJudgeVerdict | None, bool, str]:
     """Run every configured judge; merge into one verdict + disagreement flag.
 
     Merge policy: if judges disagree on is_attack, the higher-risk verdict wins
@@ -74,17 +87,27 @@ def judge_with_available_models(text: str, source: str) -> tuple[LLMJudgeVerdict
     from backend.engine.judge import judge_text  # local import: avoids cycle at module load
 
     verdicts: list[LLMJudgeVerdict] = []
-    gem = judge_text(text, source)
+    gem, gem_status = judge_text(text, source)
     if gem is not None:
         verdicts.append(gem.model_copy(update={"model": gem.model or "gemini"}))
-    groq_v = groq_judge(text, source)
+    groq_v, groq_status = groq_judge(text, source)
     if groq_v is not None:
         verdicts.append(groq_v)
 
     if not verdicts:
-        return None, False
+        statuses = [gem_status, groq_status]
+        if "timeout" in statuses:
+            final_status = "timeout"
+        elif "error" in statuses:
+            final_status = "error"
+        else:
+            final_status = "skipped"
+        return None, False, final_status
+
     if len(verdicts) == 1:
-        return verdicts[0], False
+        status = gem_status if gem is not None else groq_status
+        return verdicts[0], False, status
+    
     disagree = len({v.is_attack for v in verdicts}) > 1
     best = max(verdicts, key=lambda v: v.risk_score if v.is_attack else -1)
-    return best, disagree
+    return best, disagree, "ok"

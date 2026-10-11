@@ -3,7 +3,11 @@
 Run from the repo root (agent-sentinel/):
     .venv/Scripts/python.exe -m uvicorn backend.main:app --port 8123
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.security import APIKeyHeader
+import time
+import os
+from collections import defaultdict
 
 from backend.config import GEMINI_API_KEY, SENTINEL_HOST, SENTINEL_PORT
 from backend.engine.scam import ScamReport
@@ -13,9 +17,12 @@ from backend.schemas import (
     FeedbackEntry,
     InspectRequest,
     OutputRequest,
+    QuarantineEntry,
+    QuarantineRequest,
     ScenarioResult,
     ScamReportRequest,
     SuiteResult,
+    SummarizeRequest,
 )
 from backend.sentinel_core import inspect_text
 
@@ -24,6 +31,32 @@ app = FastAPI(
     version="0.1.0",
     description="Security firewall + audit trail for AI agents (ForgeHacks 2026).",
 )
+
+# --- Security & Rate Limiting ---
+API_KEY_NAME = "Authorization"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+def verify_api_key(api_key: str = Depends(api_key_header)):
+    expected_key = os.getenv("JANUS_API_KEY", "janus-secret-key")
+    if not api_key or not api_key.startswith("Bearer "):
+        raise HTTPException(status_code=403, detail="Could not validate credentials")
+    token = api_key.split("Bearer ")[1]
+    if token != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid API Key")
+    return token
+
+request_log = defaultdict(list)
+RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_REQUESTS = 100
+
+def rate_limit(request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    request_log[client_ip] = [ts for ts in request_log[client_ip] if now - ts < RATE_LIMIT_WINDOW]
+    if len(request_log[client_ip]) >= RATE_LIMIT_REQUESTS:
+        raise HTTPException(status_code=429, detail="Too Many Requests")
+    request_log[client_ip].append(now)
+# --------------------------------
 
 
 @app.get("/health")
@@ -37,10 +70,10 @@ def health() -> dict:
     }
 
 
-@app.post("/inspect", response_model=EnsembleVerdict)
+@app.post("/inspect", response_model=EnsembleVerdict, dependencies=[Depends(verify_api_key), Depends(rate_limit)])
 async def inspect(req: InspectRequest) -> EnsembleVerdict:
     """Inspect any text an agent is about to read and return an evidence-backed verdict."""
-    return await inspect_text(req.text, req.source)
+    return await inspect_text(req.text, req.source, session_id=req.session_id)
 
 
 @app.post("/simulate", response_model=SuiteResult)
@@ -63,7 +96,7 @@ def audit_log(limit: int = 50, only_attacks: bool = False) -> dict:
 @app.get("/email/inbox")
 async def email_inbox() -> dict:
     """Fetch inbox (mock by default, Agentboxd when configured) + Sentinel verdict per mail."""
-    from backend.surfaces.email_inbox import get_inbox
+    from backend.surfaces.email_inbox import get_inbox, is_quarantined
 
     inbox = get_inbox()
     messages = []
@@ -83,11 +116,38 @@ async def email_inbox() -> dict:
             "is_attack": verdict.is_attack,
             "attack_class": verdict.attack_class,
             "risk": verdict.final_risk,
+            "is_quarantined": is_quarantined(m.id),
             "evidence": (verdict.heuristic_hits[0].snippet if verdict.heuristic_hits
                          else (verdict.semantic_hit.matched_payload if verdict.semantic_hit else None)),
             "scam": scam.model_dump(),
         })
     return {"provider": inbox.name, "messages": messages}
+
+
+@app.post("/email/quarantine", response_model=QuarantineEntry)
+def quarantine_email_endpoint(req: QuarantineRequest) -> QuarantineEntry:
+    """Quarantine flagged mail (initiated by n8n workflow or human review)."""
+    from backend import audit
+    from backend.surfaces.email_inbox import quarantine_message
+
+    entry = quarantine_message(req.message_id, req.reason, req.sender, req.subject)
+    audit.record_feedback({
+        "type": "quarantine",
+        "message_id": req.message_id,
+        "reason": req.reason,
+        "sender": req.sender,
+        "subject": req.subject,
+    })
+    return QuarantineEntry(**entry)
+
+
+@app.get("/email/quarantine")
+def list_quarantined_endpoint() -> dict:
+    """List all emails currently marked as quarantined."""
+    from backend.surfaces.email_inbox import get_quarantined_messages
+
+    msgs = get_quarantined_messages()
+    return {"count": len(msgs), "quarantined": msgs}
 
 
 @app.post("/demo/scenario", response_model=ScenarioResult)
@@ -98,7 +158,25 @@ async def demo_scenario() -> ScenarioResult:
     return await run_scenario_async()
 
 
-@app.post("/inspect_output", response_model=EgressVerdict)
+@app.post("/summarize")
+async def summarize_email(req: SummarizeRequest):
+    """Summarize an email using the tool-less schema-locked JanusGuard."""
+    from backend.guard import JanusGuard
+    guard = JanusGuard()
+    
+    # We call agent_reply which handles stub generation and egress inspection
+    reply, verdict = guard.agent_reply(req.text)
+    import json
+    
+    # reply is either the JSON string or an error JSON string.
+    try:
+        data = json.loads(reply)
+        return data
+    except json.JSONDecodeError:
+        return {"summary": reply}
+
+
+@app.post("/inspect_output", response_model=EgressVerdict, dependencies=[Depends(verify_api_key), Depends(rate_limit)])
 async def inspect_output_endpoint(req: OutputRequest) -> EgressVerdict:
     """Egress defense: inspect an agent REPLY for leaks (canary, credentials, echoes)."""
     import time
@@ -151,7 +229,7 @@ def audit_verify() -> dict:
     return audit.verify_chain()
 
 
-@app.post("/v1/chat/completions")
+@app.post("/v1/chat/completions", dependencies=[Depends(verify_api_key), Depends(rate_limit)])
 async def v1_chat_completions(payload: dict):
     """OpenAI-compatible security proxy — inspect ingress, forward, inspect egress.
 

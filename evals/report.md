@@ -1,9 +1,9 @@
 # JanusGate — Held-out evaluation report
 
-Generated: 2026-10-08 16:12 UTC ·
-Semantic mode: **tfidf** · LLM judge: **active (Gemini)** ·
+Generated: 2026-10-11 05:02 UTC ·
+Semantic mode: **tfidf** · LLM judge: **inactive (no key)** ·
 Judge verdicts obtained: **0/26** (free-tier rate limits drop the rest; those payloads ran on heuristics+semantic) ·
-Latency p50/p95: 1/2 ms
+Latency p50/p95: 2/6 ms
 
 **Methodology (must be quoted wherever these numbers are published):** the eval set
 (`evals/payloads_eval.py`) is held out — written after the heuristic rules were frozen, with
@@ -37,8 +37,8 @@ seed 42) — small sets carry wide intervals, and that uncertainty is part of th
 ## External validation set (public data — NOT fully untouched; honest status)
 
 Source: deepset/prompt-injections (HuggingFace), vendored Oct 3 2026 — labels by the dataset authors; JanusGate tuning never used this data
-Samples: deterministic stratified sample of **120** of 546 (class mix preserved) · Generated: 2026-10-08 16:24 UTC ·
-Layer: full ensemble (layers active per call) · Judge verdicts obtained: **0/120** (rate-limited calls degraded to heuristics+semantic); elapsed 12.0 min
+Samples: deterministic stratified sample of **120** of 546 (class mix preserved) · Generated: 2026-10-11 05:02 UTC ·
+Layer: full ensemble (layers active per call) · Judge verdicts obtained: **0/120** (rate-limited calls degraded to heuristics+semantic); elapsed 0.0 min
 
 | Precision | Recall | F1 | Accuracy | TP | FP | FN | TN |
 |---|---|---|---|---|---|---|---|

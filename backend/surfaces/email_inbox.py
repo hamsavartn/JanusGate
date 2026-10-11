@@ -132,3 +132,29 @@ def get_inbox() -> MockInbox | AgentboxdInbox:
     if os.getenv("AGENTBOXD_API_KEY"):
         return AgentboxdInbox()
     return MockInbox()
+
+
+_quarantined_store: dict[str, dict] = {}
+
+
+def quarantine_message(message_id: str, reason: str, sender: str | None = None, subject: str | None = None) -> dict:
+    import time
+
+    entry = {
+        "message_id": message_id,
+        "reason": reason,
+        "sender": sender,
+        "subject": subject,
+        "timestamp": time.time(),
+    }
+    _quarantined_store[message_id] = entry
+    return entry
+
+
+def get_quarantined_messages() -> list[dict]:
+    return list(_quarantined_store.values())
+
+
+def is_quarantined(message_id: str) -> bool:
+    return message_id in _quarantined_store
+

@@ -82,6 +82,34 @@
       "typeVersion": 2,
       "position": [-440, 0],
       "webhookId": "janusgate-demo"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8123/email/quarantine",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"message_id\": {{ JSON.stringify($('Webhook: text to check').item.json.body.message_id || \"msg_flagged\") }},\n  \"reason\": {{ JSON.stringify($json.attack_class + \" - Risk: \" + $json.final_risk) }},\n  \"sender\": {{ JSON.stringify($('Webhook: text to check').item.json.body.sender || null) }},\n  \"subject\": {{ JSON.stringify($('Webhook: text to check').item.json.body.subject || null) }}\n}"
+      },
+      "id": "a6",
+      "name": "Quarantine Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [560, -40]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8123/summarize",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": {{ JSON.stringify($('Webhook: text to check').item.json.body.text || \"Email text missing\") }}\n}"
+      },
+      "id": "a7",
+      "name": "Summarize with JanusGuard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [560, 200]
     }
   ],
   "connections": {
@@ -97,6 +125,16 @@
           { "node": "Attack detected?", "type": "main", "index": 0 },
           { "node": "Clean — continue workflow", "type": "main", "index": 0 }
         ]
+      ]
+    },
+    "Attack detected?": {
+      "main": [
+        [{ "node": "Quarantine Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Clean — continue workflow": {
+      "main": [
+        [{ "node": "Summarize with JanusGuard", "type": "main", "index": 0 }]
       ]
     }
   },

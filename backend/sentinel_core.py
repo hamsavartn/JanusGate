@@ -44,7 +44,7 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
     h_risk = heuristics.heuristic_risk(hits)
 
     # Semantic + LLM layers do network I/O — run them concurrently.
-    sem_hit, (llm_verdict, judges_disagree) = await asyncio.gather(
+    sem_hit, (llm_verdict, judges_disagree, judge_status) = await asyncio.gather(
         asyncio.to_thread(semantic_scan, text),
         asyncio.to_thread(judge_with_available_models, text, source),
     )
@@ -58,28 +58,34 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
     # --- ensemble merge: collect (risk, class) candidates from each firing layer ---
     # Corroboration principle: a semantic-only hit declares an attack when similarity is
     # high-confidence (>= SEMANTIC_ALONE_SIMILARITY) or another layer corroborates it.
-    # Lower-similarity semantic hits are still reported, but not enough on their own —
-    # TF-IDF lexical overlap otherwise flags benign texts (e.g. "what does 'developer
-    # mode' mean?"). Boundary set a priori, tuned only against the dev corpus.
+    from backend.policy import session_should_block, threshold_for, update_session_risk
+
+    # Fetch threshold early to use for BOTH corroboration and the final gate
+    threshold = threshold_for(source)
+
     candidates: list[tuple[int, AttackClass]] = []
     if hits:
         top_hit = max(hits, key=lambda h: h.severity)
         candidates.append((h_risk, _CATEGORY_TO_CLASS[top_hit.category]))
     if sem_hit is not None:
-        corroborated = h_risk >= ATTACK_THRESHOLD or (
+        corroborated = h_risk >= threshold or (
             llm_verdict is not None and llm_verdict.is_attack
         )
         alone_key = "tfidf" if sem_hit.mode.startswith("tfidf") else "gemini"
         alone_needed = SEMANTIC_ALONE_SIMILARITY.get(alone_key, 0.90)
         if sem_hit.similarity >= alone_needed or corroborated:
             candidates.append((sem_hit.severity, _CATEGORY_TO_CLASS[sem_hit.category]))
-    if llm_verdict is not None and llm_verdict.is_attack:
-        candidates.append((llm_verdict.risk_score, llm_verdict.attack_class))
+    if llm_verdict is not None:
+        risk = llm_verdict.risk_score
+        # The boolean `is_attack` is authoritative for LLM intent.
+        # If the LLM says it's an attack, but the risk_score is too low, bump it to the threshold
+        # to ensure it's not silently overridden at the gate.
+        if llm_verdict.is_attack and risk < threshold:
+            risk = threshold
+        if risk > 0:
+            candidates.append((risk, llm_verdict.attack_class))
 
     # --- single-text risk, before policy ---
-    from backend.policy import session_should_block, threshold_for, update_session_risk
-
-    threshold = threshold_for(source)
     if candidates:
         final_risk, attack_class = max(candidates, key=lambda c: c[0])
         single_attack = final_risk >= threshold
@@ -105,6 +111,7 @@ async def inspect_text(text: str, source: str = "user_message", record: bool = T
         heuristic_risk=h_risk,
         semantic_hit=sem_hit,
         llm_verdict=llm_verdict,
+        judge_status=judge_status,
         judges_disagree=judges_disagree,
         layers_used=layers,
         latency_ms=int((time.perf_counter() - t0) * 1000),

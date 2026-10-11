@@ -57,10 +57,47 @@ def get_client() -> genai.Client | None:
     return _client
 
 
-def judge_text(text: str, source: str = "user_message") -> LLMJudgeVerdict | None:
+def _fail_closed_safety_verdict(reason: str = "Blocked by upstream safety filters") -> LLMJudgeVerdict:
+    """Fail-closed policy: if text triggers upstream safety/moderation filters, treat as malicious attack."""
+    return LLMJudgeVerdict(
+        is_attack=True,
+        attack_class="jailbreak",
+        risk_score=9,
+        confidence=0.95,
+        evidence=["Upstream model safety/content moderation refusal"],
+        reasoning=f"Text triggered safety filter ({reason}). Fail-closed security policy treated input as attack.",
+        model=GEMINI_JUDGE_MODEL,
+    )
+
+
+SAFETY_SETTINGS = [
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+    ),
+]
+
+
+def judge_text(text: str, source: str = "user_message") -> tuple[LLMJudgeVerdict | None, str]:
     client = get_client()
     if client is None:
-        return None
+        return None, "skipped"
     global _consecutive_429, _judge_disabled
     prompt = (
         f"Source of the text (who the agent would receive it from): {source}\n"
@@ -69,8 +106,11 @@ def judge_text(text: str, source: str = "user_message") -> LLMJudgeVerdict | Non
     try:
         verdict = _call_once(client, prompt)
         _consecutive_429 = 0
-        return verdict
+        return verdict, "ok"
     except Exception as e:
+        err_str = str(e).lower()
+        if any(term in err_str for term in ["safety", "harm", "blocked", "finish_reason", "block_reason", "recitation"]):
+            return _fail_closed_safety_verdict(str(e)), "ok"
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
             _consecutive_429 += 1
             if _consecutive_429 >= 3:
@@ -82,10 +122,17 @@ def judge_text(text: str, source: str = "user_message") -> LLMJudgeVerdict | Non
             try:
                 verdict = _call_once(client, prompt)
                 _consecutive_429 = 0
-                return verdict
-            except Exception:
-                return None
-        return None
+                return verdict, "ok"
+            except Exception as e2:
+                err_str2 = str(e2).lower()
+                if any(term in err_str2 for term in ["safety", "harm", "blocked", "finish_reason", "block_reason", "recitation"]):
+                    return _fail_closed_safety_verdict(str(e2)), "ok"
+                if "timeout" in err_str2 or "deadline" in err_str2:
+                    return None, "timeout"
+                return None, "error"
+        if "timeout" in err_str or "deadline" in err_str:
+            return None, "timeout"
+        return None, "error"
 
 
 def _call_once(client: genai.Client, prompt: str) -> LLMJudgeVerdict:
@@ -97,15 +144,30 @@ def _call_once(client: genai.Client, prompt: str) -> LLMJudgeVerdict:
             response_mime_type="application/json",
             response_schema=_JudgeResponse,
             temperature=0.1,
+            safety_settings=SAFETY_SETTINGS,
         ),
     )
+    # Check for safety filter refusal in candidates or prompt feedback
+    if getattr(resp, "candidates", None) and len(resp.candidates) > 0:
+        candidate = resp.candidates[0]
+        finish_reason = getattr(candidate, "finish_reason", None)
+        if finish_reason and "SAFETY" in str(finish_reason).upper():
+            return _fail_closed_safety_verdict(f"FinishReason: {finish_reason}")
+    if getattr(resp, "prompt_feedback", None):
+        block_reason = getattr(resp.prompt_feedback, "block_reason", None)
+        if block_reason:
+            return _fail_closed_safety_verdict(f"PromptBlockReason: {block_reason}")
+
     parsed = resp.parsed
     if isinstance(parsed, _JudgeResponse):
         data = parsed
     elif parsed is not None:
         data = _JudgeResponse.model_validate(parsed)
-    else:
+    elif getattr(resp, "text", None):
         data = _JudgeResponse.model_validate_json(resp.text)
+    else:
+        return _fail_closed_safety_verdict("Response empty or blocked by model")
+
     return LLMJudgeVerdict(
         is_attack=data.is_attack,
         attack_class=data.attack_class,
@@ -115,3 +177,4 @@ def _call_once(client: genai.Client, prompt: str) -> LLMJudgeVerdict:
         reasoning=data.reasoning,
         model=GEMINI_JUDGE_MODEL,
     )
+

@@ -71,6 +71,7 @@ class EnsembleVerdict(BaseModel):
     heuristic_risk: int = Field(ge=0, le=10)
     semantic_hit: SemanticHit | None = None
     llm_verdict: LLMJudgeVerdict | None = None
+    judge_status: Literal["ok", "skipped", "error", "timeout"] = Field(default="ok", description="Status of the LLM judge layer")
     judges_disagree: bool = Field(default=False, description="Multiple LLM judges disagreed on is_attack")
     layers_used: list[str]
     latency_ms: int
@@ -78,12 +79,33 @@ class EnsembleVerdict(BaseModel):
 
 
 class InspectRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=20000)
+    text: str = Field(min_length=1, max_length=10000)
     source: Literal["user_message", "tool_output", "email", "document"] = "user_message"
+    session_id: str | None = Field(default=None, description="Optional session ID for multi-turn risk tracking")
+
+
+class SummarizeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=20000)
+
+
+class QuarantineRequest(BaseModel):
+    message_id: str = Field(description="ID of the message to quarantine")
+    reason: str = Field(description="Reason for quarantine, e.g. attack_class or risk")
+    sender: str | None = Field(default=None, description="Sender of the quarantined email")
+    subject: str | None = Field(default=None, description="Subject of the quarantined email")
+
+
+class QuarantineEntry(BaseModel):
+    message_id: str
+    reason: str
+    sender: str | None = None
+    subject: str | None = None
+    timestamp: float
+
 
 
 class OutputRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=20000, description="Agent reply text to inspect")
+    text: str = Field(min_length=1, max_length=10000, description="Agent reply text to inspect")
 
 
 class ScamReportRequest(BaseModel):
