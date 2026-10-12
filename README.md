@@ -13,6 +13,7 @@ AI agents now read emails, browse documents, and call tools autonomously. The OW
 
 * **Dashboard (Streamlit):** [https://jansgate.streamlit.app/](https://jansgate.streamlit.app/)
 * **Core API (Render):** [https://janusgate-api.onrender.com/docs](https://janusgate-api.onrender.com/docs)
+* **Youtube (Tutorial link): ** [https://youtu.be/Li-NzvcNEj4?si=qn7lLXd-Zpervq2i]
 
 ## Why this matters
 
