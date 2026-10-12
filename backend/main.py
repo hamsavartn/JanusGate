@@ -37,10 +37,13 @@ API_KEY_NAME = "Authorization"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 def verify_api_key(api_key: str = Depends(api_key_header)):
-    expected_key = os.getenv("JANUS_API_KEY", "janus-secret-key")
+    expected_key = os.getenv("JANUS_API_KEY", "").strip()
+    # If no JANUS_API_KEY is configured in the environment, auth is open/optional so n8n & demos work out-of-the-box.
+    if not expected_key:
+        return "open"
     if not api_key or not api_key.startswith("Bearer "):
         raise HTTPException(status_code=403, detail="Could not validate credentials")
-    token = api_key.split("Bearer ")[1]
+    token = api_key.split("Bearer ")[1].strip()
     if token != expected_key:
         raise HTTPException(status_code=403, detail="Invalid API Key")
     return token

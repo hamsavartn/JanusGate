@@ -408,3 +408,45 @@ def test_email_quarantine_flow(client):
     assert target_msg["is_quarantined"] is True
 
 
+def test_auth_optional_by_default_for_n8n(monkeypatch):
+    from fastapi.testclient import TestClient
+    from backend.main import app
+
+    monkeypatch.delenv("JANUS_API_KEY", raising=False)
+    # Client with NO Authorization header (like default n8n HTTP Request node)
+    raw_client = TestClient(app)
+    r = raw_client.post("/inspect", json={"text": "Hello world from n8n"})
+    assert r.status_code == 200
+    assert not r.json()["is_attack"]
+
+
+def test_auth_enforced_when_janus_key_configured(monkeypatch):
+    from fastapi.testclient import TestClient
+    from backend.main import app
+
+    monkeypatch.setenv("JANUS_API_KEY", "prod-secret-999")
+    raw_client = TestClient(app)
+
+    # Missing header -> 403
+    r_no_auth = raw_client.post("/inspect", json={"text": "Hello world"})
+    assert r_no_auth.status_code == 403
+    assert r_no_auth.json()["detail"] == "Could not validate credentials"
+
+    # Wrong key -> 403
+    r_bad_auth = raw_client.post(
+        "/inspect",
+        headers={"Authorization": "Bearer wrong-key"},
+        json={"text": "Hello world"},
+    )
+    assert r_bad_auth.status_code == 403
+    assert r_bad_auth.json()["detail"] == "Invalid API Key"
+
+    # Correct key -> 200
+    r_ok = raw_client.post(
+        "/inspect",
+        headers={"Authorization": "Bearer prod-secret-999"},
+        json={"text": "Hello world"},
+    )
+    assert r_ok.status_code == 200
+
+
