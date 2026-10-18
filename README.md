@@ -1,5 +1,7 @@
 # JanusGate 🏛️🛡️
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/hamsavartn/janusgate)](https://m8ven.ai/mcp/hamsavartn/janusgate?s=readme)
+
 > *One face watches what enters. One watches what leaves.*
 [![M8ven Score](https://m8ven.ai/badge/mcp/hamsavartn-janusgate-1wpc09?v=ea22f26292b247744f518605a2543422)](https://m8ven.ai/mcp/hamsavartn-janusgate-1wpc09?s=readme)
 

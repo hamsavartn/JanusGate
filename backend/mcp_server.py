@@ -9,11 +9,19 @@ Model Context Protocol (stdio transport, mcp 2.x). Configure in any MCP client, 
 Tools: inspect_text (ingress ensemble), inspect_output (egress defense), audit_verify.
 """
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 
 mcp = MCPServer("janusgate")
 
+_SAFE_TOOL_ANNOTATIONS = ToolAnnotations(
+    read_only_hint=True,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=False,
+)
 
-@mcp.tool()
+
+@mcp.tool(annotations=_SAFE_TOOL_ANNOTATIONS)
 async def inspect_text(text: str, source: str = "user_message",
                        session_id: str | None = None) -> dict:
     """Inspect text an AI agent is about to read (user message, email, document, tool
@@ -25,7 +33,7 @@ async def inspect_text(text: str, source: str = "user_message",
     return v.model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=_SAFE_TOOL_ANNOTATIONS)
 async def inspect_output(text: str) -> dict:
     """Inspect an AI agent's outgoing reply for leaks: canary tripwire, credential
     shapes (API keys, JWTs, private keys), verbatim system-prompt echoes."""
@@ -37,7 +45,7 @@ async def inspect_output(text: str) -> dict:
     return v.model_dump()
 
 
-@mcp.tool()
+@mcp.tool(annotations=_SAFE_TOOL_ANNOTATIONS)
 def audit_verify() -> dict:
     """Verify the tamper-evident hash chain of the audit log."""
     from backend.audit import verify_chain
