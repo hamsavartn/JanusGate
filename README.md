@@ -1,6 +1,7 @@
 # JanusGate 🏛️🛡️
 
 > *One face watches what enters. One watches what leaves.*
+[![M8ven Score](https://m8ven.ai/badge/mcp/hamsavartn-janusgate-1wpc09?v=ea22f26292b247744f518605a2543422)](https://m8ven.ai/mcp/hamsavartn-janusgate-1wpc09?s=readme)
 
 **A two-way security firewall + audit trail for AI agents — inspects both ingress (what the agent reads) and egress (what it sends), with a per-message scam report for human recipients.**
 
